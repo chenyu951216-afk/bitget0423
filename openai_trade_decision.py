@@ -139,6 +139,9 @@ def _stable_payload(candidate: Dict[str, Any]) -> Dict[str, Any]:
         'market_pattern': ((candidate.get('market') or {}).get('pattern')),
         'market_direction': ((candidate.get('market') or {}).get('direction')),
         'breakdown': candidate.get('breakdown_full') or {},
+        'market_context': candidate.get('market_context') or {},
+        'execution_policy': candidate.get('execution_policy') or {},
+        'constraints': candidate.get('constraints') or {},
     }
 
 
@@ -167,9 +170,13 @@ def build_candidate_payload(
 ) -> Dict[str, Any]:
     breakdown = dict(signal.get('breakdown') or {})
     execution_quality = dict(signal.get('execution_quality') or {})
+    market_context = dict(signal.get('openai_market_context') or {})
+    style = dict((market_context.get('style') or {}))
+    execution_policy = dict((market_context.get('execution_policy') or {}))
     return {
         'symbol': str(signal.get('symbol') or ''),
         'side': 'long' if float(signal.get('score', 0) or 0) >= 0 else 'short',
+        'trade_style': str(constraints.get('trade_style') or style.get('holding_period') or 'short_term_intraday'),
         'rank': int(rank_index) + 1,
         'score': _round(signal.get('score'), 4),
         'raw_score': _round(signal.get('raw_score', signal.get('score')), 4),
@@ -194,6 +201,7 @@ def build_candidate_payload(
             'strength': _round(market.get('strength'), 4),
             'prediction': str(market.get('prediction') or '')[:240],
         },
+        'market_context': market_context,
         'risk': {
             'trading_ok': bool(risk_status.get('trading_ok', True)),
             'halt_reason': str(risk_status.get('halt_reason') or '')[:180],
@@ -206,6 +214,7 @@ def build_candidate_payload(
             'same_direction_count': int(portfolio.get('same_direction_count', 0) or 0),
             'open_symbols': list(portfolio.get('open_symbols') or [])[:8],
         },
+        'execution_policy': execution_policy,
         'top_candidates': list(top_candidates or [])[:5],
         'constraints': dict(constraints or {}),
     }
@@ -340,19 +349,28 @@ def _build_messages(candidate: Dict[str, Any]) -> list[Dict[str, Any]]:
     max_margin_pct = float(constraints.get('max_margin_pct', 0.08) or 0.08)
     min_leverage = int(constraints.get('min_leverage', 4) or 4)
     max_leverage = int(constraints.get('max_leverage', 25) or 25)
+    fixed_leverage = int(constraints.get('fixed_leverage', max_leverage) or max_leverage)
+    min_order_margin_usdt = float(constraints.get('min_order_margin_usdt', 0.1) or 0.1)
+    trade_style = str(candidate.get('trade_style') or constraints.get('trade_style') or 'short_term_intraday')
     system_text = (
-        'You are a crypto perpetual futures execution planner. '
-        'Use the full candidate payload. '
+        'You are a crypto perpetual futures execution planner for short-term trading. '
+        'Use every field in the candidate payload, especially the multi-timeframe market context, '
+        'the latest closed candle shape, momentum, volatility, volume expansion, execution context, and risk state. '
         'Make the final trading plan, not a generic analysis. '
-        'Be decisive rather than overly conservative, but stay inside the leverage and margin bounds. '
-        'If the setup is tradable, do not default to tiny size. '
+        'Be decisive rather than overly conservative. '
+        'If the setup is tradable, do not default to tiny size or timid positioning. '
+        'Assume the bot will execute with the exchange maximum leverage for this symbol. '
+        'Your job is to decide whether the setup is worth trading now, whether entry should be market or limit, '
+        'and what stop loss / take profit / thesis best fit a short-term trade. '
         'Only reject the trade when the setup is clearly weak, conflicting, or poorly priced. '
         'Return valid JSON only.'
     )
     user_text = (
-        'Decide whether to place a crypto perpetual futures order.\n'
+        f'Decide whether to place a {trade_style} crypto perpetual futures order.\n'
         f'Hard bounds:\n- leverage must be between {min_leverage} and {max_leverage}\n'
         f'- margin_pct must be between {min_margin_pct:.4f} and {max_margin_pct:.4f}\n'
+        f'- actual execution leverage is fixed to {fixed_leverage}x (exchange maximum), so return that leverage value\n'
+        f'- the bot can go as low as {min_order_margin_usdt:.4f} USDT minimum margin floor, but do not choose timid sizing when the setup is strong\n'
         '- order_type must be market or limit\n'
         '- stop_loss and take_profit must be valid for the side\n'
         '- confidence should be 0-100\n'
@@ -407,7 +425,7 @@ def _normalize_decision(raw: Dict[str, Any], candidate: Dict[str, Any]) -> Dict[
         'entry_price': float(raw.get('entry_price', entry_default) or entry_default),
         'stop_loss': float(raw.get('stop_loss', stop_default) or stop_default),
         'take_profit': float(raw.get('take_profit', tp_default) or tp_default),
-        'leverage': int(_clamp(raw.get('leverage', constraints.get('min_leverage', 4)), constraints.get('min_leverage', 4), constraints.get('max_leverage', 25))),
+        'leverage': int(_clamp(raw.get('leverage', constraints.get('fixed_leverage', constraints.get('min_leverage', 4))), constraints.get('min_leverage', 4), constraints.get('max_leverage', 25))),
         'margin_pct': _clamp(raw.get('margin_pct', constraints.get('min_margin_pct', 0.03)), constraints.get('min_margin_pct', 0.03), constraints.get('max_margin_pct', 0.08)),
         'confidence': _clamp(raw.get('confidence', 0), 0, 100),
         'thesis': str(raw.get('thesis') or '').strip(),
@@ -415,6 +433,8 @@ def _normalize_decision(raw: Dict[str, Any], candidate: Dict[str, Any]) -> Dict[
         'risk_notes': [str(x).strip() for x in list(raw.get('risk_notes') or []) if str(x).strip()][:6],
         'aggressive_note': str(raw.get('aggressive_note') or '').strip(),
     }
+    if constraints.get('fixed_leverage'):
+        decision['leverage'] = int(constraints.get('fixed_leverage') or decision['leverage'])
     if not math.isfinite(decision['entry_price']) or decision['entry_price'] <= 0:
         decision['entry_price'] = entry_default
     if not math.isfinite(decision['stop_loss']) or decision['stop_loss'] <= 0:
