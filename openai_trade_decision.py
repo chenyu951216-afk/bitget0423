@@ -224,6 +224,7 @@ def _short_label(status: str) -> str:
         'missing_api_key': 'Missing API key',
         'auth_error': 'OpenAI auth error',
         'permission_error': 'OpenAI permission error',
+        'bad_request': 'OpenAI bad request',
         'rate_limit': 'OpenAI rate limit',
         'error': 'OpenAI error',
     }
@@ -364,6 +365,34 @@ def _build_messages(candidate: Dict[str, Any]) -> list[Dict[str, Any]]:
         {'role': 'system', 'content': [{'type': 'input_text', 'text': system_text}]},
         {'role': 'user', 'content': [{'type': 'input_text', 'text': user_text}]},
     ]
+
+
+def _build_request_body(candidate: Dict[str, Any], config: Dict[str, Any], *, structured: bool = True) -> Dict[str, Any]:
+    body = {
+        'model': str(config.get('model') or 'gpt-5-nano'),
+        'input': _build_messages(candidate),
+        'max_output_tokens': int(config.get('max_output_tokens', 900) or 900),
+    }
+    effort = str(config.get('reasoning_effort') or '').strip()
+    if effort:
+        body['reasoning'] = {'effort': effort}
+    if structured:
+        body['text'] = {
+            'format': {
+                'type': 'json_schema',
+                'name': 'trade_decision',
+                'schema': _json_schema(),
+                'strict': True,
+            }
+        }
+        body['temperature'] = float(config.get('temperature', 0.2) or 0.2)
+    else:
+        body['text'] = {
+            'format': {
+                'type': 'json_object',
+            }
+        }
+    return body
 
 
 def _normalize_decision(raw: Dict[str, Any], candidate: Dict[str, Any]) -> Dict[str, Any]:
@@ -513,31 +542,24 @@ def consult_trade_decision(
         'Authorization': f'Bearer {api_key}',
         'Content-Type': 'application/json',
     }
-    request_body = {
-        'model': str(config.get('model') or 'gpt-5-nano'),
-        'input': _build_messages(candidate),
-        'max_output_tokens': int(config.get('max_output_tokens', 900) or 900),
-        'reasoning': {'effort': str(config.get('reasoning_effort') or 'low')},
-        'temperature': float(config.get('temperature', 0.2) or 0.2),
-        'text': {
-            'format': {
-                'type': 'json_schema',
-                'name': 'trade_decision',
-                'schema': _json_schema(),
-                'strict': True,
-            }
-        },
-    }
+    request_body = _build_request_body(candidate, config, structured=True)
     if logger:
         logger('OpenAI trade decision request: {} rank={} score={:.2f}'.format(symbol, rank, score_abs))
 
     try:
-        resp = requests.post(
-            str(config.get('base_url') or 'https://api.openai.com/v1/responses'),
-            headers=headers,
-            json=request_body,
-            timeout=float(config.get('request_timeout_sec', 35.0) or 35.0),
-        )
+        base_url = str(config.get('base_url') or 'https://api.openai.com/v1/responses')
+        timeout_sec = float(config.get('request_timeout_sec', 35.0) or 35.0)
+        resp = requests.post(base_url, headers=headers, json=request_body, timeout=timeout_sec)
+        if resp.status_code == 400:
+            body_text = ''
+            try:
+                body_text = resp.text or ''
+            except Exception:
+                body_text = ''
+            if logger:
+                logger('OpenAI structured request 400: {} | {}'.format(symbol, body_text[:260]))
+            fallback_body = _build_request_body(candidate, config, structured=False)
+            resp = requests.post(base_url, headers=headers, json=fallback_body, timeout=timeout_sec)
         resp.raise_for_status()
         body = resp.json()
         raw_text = _extract_text(body)
@@ -623,6 +645,11 @@ def consult_trade_decision(
                 detail = 'OpenAI rate limit hit (429). Slow down requests or check usage limits.'
                 if body_text:
                     detail += ' | body=' + body_text[:180]
+            elif status_code == 400:
+                status = 'bad_request'
+                detail = 'OpenAI request body rejected (400). The deployment can reach the API, but one or more request fields are invalid for the current model/account.'
+                if body_text:
+                    detail += ' | body=' + body_text[:220]
         except Exception:
             pass
         state['last_error'] = err[:300]
