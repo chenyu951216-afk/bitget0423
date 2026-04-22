@@ -222,6 +222,9 @@ def _short_label(status: str) -> str:
         'not_ranked': 'Outside OpenAI top K',
         'disabled': 'OpenAI disabled',
         'missing_api_key': 'Missing API key',
+        'auth_error': 'OpenAI auth error',
+        'permission_error': 'OpenAI permission error',
+        'rate_limit': 'OpenAI rate limit',
         'error': 'OpenAI error',
     }
     return mapping.get(str(status or ''), str(status or 'unknown'))
@@ -589,18 +592,51 @@ def consult_trade_decision(
         }
     except Exception as exc:
         err = str(exc)
+        status = 'error'
+        detail = err
+        try:
+            response = getattr(exc, 'response', None)
+            status_code = int(getattr(response, 'status_code', 0) or 0)
+            body_text = ''
+            if response is not None:
+                try:
+                    body_text = response.text or ''
+                except Exception:
+                    body_text = ''
+            if status_code == 401:
+                status = 'auth_error'
+                detail = (
+                    'OpenAI authentication failed (401). '
+                    'Check OPENAI_API_KEY in deployment env. '
+                    'Use an API key from platform.openai.com, not a ChatGPT login/subscription token. '
+                    'Also remove quotes, spaces, and trailing newlines.'
+                )
+                if body_text:
+                    detail += ' | body=' + body_text[:180]
+            elif status_code == 403:
+                status = 'permission_error'
+                detail = 'OpenAI request forbidden (403). Check project permission, billing, and model access.'
+                if body_text:
+                    detail += ' | body=' + body_text[:180]
+            elif status_code == 429:
+                status = 'rate_limit'
+                detail = 'OpenAI rate limit hit (429). Slow down requests or check usage limits.'
+                if body_text:
+                    detail += ' | body=' + body_text[:180]
+        except Exception:
+            pass
         state['last_error'] = err[:300]
         state['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        _append_recent(state, _build_recent_item(candidate, status='error', detail=err[:260], model=str(config.get('model') or '')))
+        _append_recent(state, _build_recent_item(candidate, status=status, detail=detail[:260], model=str(config.get('model') or '')))
         save_trade_state(state_path, state)
         if logger:
-            logger('OpenAI trade decision failed: {} | {}'.format(symbol, err[:240]))
+            logger('OpenAI trade decision failed: {} | {}'.format(symbol, detail[:240]))
         return state, {
-            'status': 'error',
+            'status': status,
             'decision': None,
             'payload_hash': payload_hash,
             'symbol_state': symbol_state,
-            'error': err,
+            'error': detail,
         }
 
 
