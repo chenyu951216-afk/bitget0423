@@ -7144,6 +7144,7 @@ def scan_thread():
                             'missing_api_key': '缺少API Key',
                             'auth_error': 'OpenAI 驗證失敗',
                             'permission_error': 'OpenAI 權限不足',
+                            'bad_request': 'OpenAI 請求格式錯誤',
                             'rate_limit': 'OpenAI 速率限制',
                             'below_min_score': '分數太低',
                             'local_gate_block': '本地風控阻擋',
