@@ -47,6 +47,7 @@ def default_trade_config(env_getter: Callable[[str, str], str]) -> Dict[str, Any
         'cached_input_price_per_1m_usd': max(_env_float(env_getter, 'OPENAI_TRADE_PRICE_CACHED_INPUT_PER_1M_USD', 0.02), 0.0),
         'top_k_per_scan': max(_env_int(env_getter, 'OPENAI_TRADE_TOP_K', 3), 1),
         'cooldown_minutes': max(_env_int(env_getter, 'OPENAI_TRADE_SYMBOL_COOLDOWN_MINUTES', 180), 1),
+        'global_min_interval_minutes': max(_env_int(env_getter, 'OPENAI_TRADE_GLOBAL_MIN_INTERVAL_MINUTES', 15), 0),
         'min_score_abs': max(_env_float(env_getter, 'OPENAI_TRADE_MIN_SCORE', 38.0), 0.0),
         'min_margin_pct': min(max(_env_float(env_getter, 'OPENAI_TRADE_MIN_MARGIN_PCT', 0.03), 0.005), 0.5),
         'max_margin_pct': min(max(_env_float(env_getter, 'OPENAI_TRADE_MAX_MARGIN_PCT', 0.08), 0.01), 0.8),
@@ -75,6 +76,7 @@ def _new_state(now_ts: float | None = None) -> Dict[str, Any]:
         'input_tokens': 0,
         'output_tokens': 0,
         'cached_input_tokens': 0,
+        'last_consulted_ts': 0.0,
         'symbols': {},
         'recent_decisions': [],
         'last_error': '',
@@ -225,6 +227,7 @@ def _short_label(status: str) -> str:
         'consulted': 'OpenAI consulted',
         'cached_reuse': 'Cached decision reused',
         'cooldown_active': 'Symbol cooldown active',
+        'global_interval_active': 'Global send interval active',
         'same_payload_reuse': 'Same payload reused',
         'budget_paused': 'Budget paused',
         'below_min_score': 'Score below filter',
@@ -475,6 +478,7 @@ def consult_trade_decision(
     payload_hash = _hash_payload(_stable_payload(candidate))
     symbol_state = dict((state.get('symbols') or {}).get(symbol, {}) or {})
     cooldown_sec = max(int(config.get('cooldown_minutes', 180) or 180), 1) * 60
+    global_interval_sec = max(int(config.get('global_min_interval_minutes', 15) or 15), 0) * 60
     score_abs = abs(float(candidate.get('score', 0) or 0))
     rank = int(candidate.get('rank', 99) or 99)
 
@@ -508,31 +512,12 @@ def consult_trade_decision(
     last_hash = str(symbol_state.get('last_payload_hash') or '')
     last_sent_ts = float(symbol_state.get('last_sent_ts', 0) or 0)
     cached_decision = dict(symbol_state.get('last_decision') or {})
-    if cached_decision and last_hash == payload_hash:
-        result = {
-            'status': 'cached_reuse',
-            'decision': cached_decision,
-            'payload_hash': payload_hash,
-            'symbol_state': symbol_state,
-            'cached': True,
-        }
-        _append_recent(
-            state,
-            _build_recent_item(
-                candidate,
-                status='cached_reuse',
-                action='trade' if cached_decision.get('should_trade') else 'skip',
-                detail='Same symbol payload already sent before, reused cached OpenAI decision.',
-                decision=cached_decision,
-                model=str(symbol_state.get('last_model') or config.get('model') or ''),
-            ),
-        )
-        save_trade_state(state_path, state)
-        return state, result
 
     if last_sent_ts > 0 and (now_ts - last_sent_ts) < cooldown_sec:
         next_allowed_ts = last_sent_ts + cooldown_sec
         detail = 'Symbol cooldown is active until {}.'.format(datetime.fromtimestamp(next_allowed_ts).strftime('%Y-%m-%d %H:%M:%S'))
+        if cached_decision and last_hash == payload_hash:
+            detail += ' Same symbol payload was already sent in the current cooldown window.'
         result = {
             'status': 'cooldown_active',
             'decision': None,
@@ -541,6 +526,21 @@ def consult_trade_decision(
             'next_allowed_ts': next_allowed_ts,
         }
         _append_recent(state, _build_recent_item(candidate, status='cooldown_active', detail=detail))
+        save_trade_state(state_path, state)
+        return state, result
+
+    last_consulted_ts = float(state.get('last_consulted_ts', 0) or 0)
+    if global_interval_sec > 0 and last_consulted_ts > 0 and (now_ts - last_consulted_ts) < global_interval_sec:
+        next_allowed_ts = last_consulted_ts + global_interval_sec
+        detail = 'Global OpenAI interval is active until {}.'.format(datetime.fromtimestamp(next_allowed_ts).strftime('%Y-%m-%d %H:%M:%S'))
+        result = {
+            'status': 'global_interval_active',
+            'decision': None,
+            'payload_hash': payload_hash,
+            'symbol_state': symbol_state,
+            'next_allowed_ts': next_allowed_ts,
+        }
+        _append_recent(state, _build_recent_item(candidate, status='global_interval_active', detail=detail))
         save_trade_state(state_path, state)
         return state, result
 
@@ -605,6 +605,7 @@ def consult_trade_decision(
         state['input_tokens'] = int(state.get('input_tokens', 0) or 0) + input_tokens
         state['output_tokens'] = int(state.get('output_tokens', 0) or 0) + output_tokens
         state['cached_input_tokens'] = int(state.get('cached_input_tokens', 0) or 0) + cached_input_tokens
+        state['last_consulted_ts'] = now_ts
         state['spent_estimated_usd'] = round(float(state.get('spent_estimated_usd', 0.0) or 0.0) + est_cost_usd, 6)
         state['spent_estimated_twd'] = round(float(state.get('spent_estimated_twd', 0.0) or 0.0) + est_cost_twd, 4)
         state['last_error'] = ''
@@ -709,6 +710,7 @@ def build_dashboard_payload(state: Dict[str, Any], config: Dict[str, Any], *, ap
         'cached_input_tokens': int(state.get('cached_input_tokens', 0) or 0),
         'top_k_per_scan': int(config.get('top_k_per_scan', 3) or 3),
         'cooldown_minutes': int(config.get('cooldown_minutes', 180) or 180),
+        'global_min_interval_minutes': int(config.get('global_min_interval_minutes', 15) or 15),
         'min_score_abs': float(config.get('min_score_abs', 38.0) or 38.0),
         'last_error': str(state.get('last_error') or ''),
         'updated_at': str(state.get('updated_at') or ''),
