@@ -6251,7 +6251,7 @@ def plan_scale_in_orders(sig, total_qty, entry_price, atr):
 
 def compute_order_size(sym, entry_price, stop_price, equity, lev, margin_pct=None):
     """
-    倉位大小 = min(名目資金上限, 停損風險上限)，但實際保證金至少為總資金 1%。
+    倉位大小 = min(名目資金上限, 停損風險上限)，但實際保證金至少保留極小下單底線。
     槓桿放大多少不影響這個底線：先保證最低投入保證金，再用槓桿換算口數。
     """
     try:
@@ -6265,7 +6265,7 @@ def compute_order_size(sym, entry_price, stop_price, equity, lev, margin_pct=Non
 
         selected_margin_pct = float(margin_pct if margin_pct is not None else RISK_PCT)
         selected_margin_pct = clamp(selected_margin_pct, MIN_MARGIN_PCT, MAX_MARGIN_PCT)
-        min_margin_usdt = max(equity * MIN_MARGIN_PCT, 1.0)
+        min_margin_usdt = max(equity * MIN_MARGIN_PCT, 0.1)
         target_margin_usdt = max(equity * selected_margin_pct, min_margin_usdt)
 
         risk_budget = max(equity * ATR_RISK_PCT, 0.5)
@@ -6294,7 +6294,7 @@ def compute_order_size(sym, entry_price, stop_price, equity, lev, margin_pct=Non
         print("倉位計算失敗 {}: {}".format(sym, e))
         fallback_margin = clamp(float(margin_pct or RISK_PCT), MIN_MARGIN_PCT, MAX_MARGIN_PCT)
         fallback_margin = max(fallback_margin, MIN_MARGIN_PCT)
-        fallback_notional = max(float(equity) * fallback_margin, 1.0)
+        fallback_notional = max(float(equity) * fallback_margin, 0.1)
         qty = float(exchange.amount_to_precision(sym, fallback_notional * max(float(lev),1.0) / max(float(entry_price),1e-9)))
         return qty, round(fallback_notional, 4), 0.0, abs(float(entry_price) - float(stop_price)), round(fallback_margin, 4)
 
@@ -6512,8 +6512,8 @@ def place_order(sig):
                 _ORDERED_THIS_SCAN.discard(sym_check)
             return
         # 向 Bitget 確認並設定最高槓桿
-        lev = 20
-        requested_lev = int(openai_plan.get('leverage', 0) or 0)
+        lev = _get_symbol_max_leverage(sym)
+        requested_lev = 0
         try:
             mkt  = exchange.market(sym)
             info = mkt.get('info', {})
@@ -6772,6 +6772,148 @@ def _apply_openai_trade_plan_to_signal(sig, decision, result):
     return sig
 
 
+def _get_symbol_max_leverage(symbol):
+    lev = max(1, int(OPENAI_TRADE_CONFIG.get('max_leverage', 25) or 25))
+    try:
+        mkt = exchange.market(symbol)
+        info = mkt.get('info', {})
+        for field in ['maxLeverage', 'maxLev', 'leverageMax']:
+            val = info.get(field)
+            if not val:
+                continue
+            try:
+                lev = max(lev, int(float(str(val))))
+                if lev > 1:
+                    break
+            except Exception:
+                continue
+        if lev <= 20:
+            try:
+                lev = max(lev, int(mkt.get('limits', {}).get('leverage', {}).get('max', lev)))
+            except Exception:
+                pass
+        if lev <= 20:
+            try:
+                tiers = exchange.fetch_leverage_tiers([symbol])
+                sym_tiers = tiers.get(symbol, [])
+                if sym_tiers:
+                    lev = max(lev, int(max(t.get('maxLeverage', lev) for t in sym_tiers)))
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return max(int(lev or 1), 1)
+
+
+def _build_openai_short_term_context(sig, market_info, constraints):
+    symbol = str(sig.get('symbol') or '')
+    side = 'long' if float(sig.get('score', 0) or 0) >= 0 else 'short'
+    tf_plan = [('5m', 160), ('15m', 180), ('1h', 180), ('4h', 160), ('1d', 140)]
+    tf_data = {}
+    raw_frames = {}
+    for tf, limit in tf_plan:
+        df = _safe_fetch_ohlcv_df(symbol, tf, limit)
+        if df is None or df.empty:
+            continue
+        raw_frames[tf] = df
+        snap = _snapshot_from_df(df)
+        if snap:
+            tf_data[tf] = snap
+
+    radar = {}
+    try:
+        if raw_frames.get('15m') is not None and raw_frames.get('4h') is not None:
+            radar = analyze_pre_breakout_radar(raw_frames.get('15m'), raw_frames.get('4h'), raw_frames.get('1d'))
+    except Exception as radar_e:
+        radar = {'ready': False, 'note': 'pre_breakout_radar_error: {}'.format(radar_e)}
+
+    ticker_context = {}
+    try:
+        ticker = exchange.fetch_ticker(symbol)
+        last = float(ticker.get('last') or ticker.get('close') or sig.get('price') or 0)
+        bid = float(ticker.get('bid') or 0)
+        ask = float(ticker.get('ask') or 0)
+        quote_volume = float(ticker.get('quoteVolume') or ticker.get('baseVolume') or 0)
+        spread_pct = ((ask - bid) / max(last, 1e-9) * 100.0) if bid > 0 and ask > 0 else 0.0
+        ticker_context = {
+            'last': _safe_round_metric(last, 8),
+            'bid': _safe_round_metric(bid, 8),
+            'ask': _safe_round_metric(ask, 8),
+            'spread_pct': _safe_round_metric(spread_pct, 4),
+            'quote_volume': _safe_round_metric(quote_volume, 4),
+            'percentage_24h': _safe_round_metric(ticker.get('percentage', 0), 3),
+            'change_24h': _safe_round_metric(ticker.get('change', 0), 8),
+            'high_24h': _safe_round_metric(ticker.get('high', 0), 8),
+            'low_24h': _safe_round_metric(ticker.get('low', 0), 8),
+        }
+    except Exception as ticker_e:
+        ticker_context = {'error': str(ticker_e)[:180]}
+
+    execution_context = {}
+    try:
+        execution_context = dict(exec_quality_snapshot(exchange, symbol, side) or {})
+    except Exception as exec_e:
+        execution_context = {'error': str(exec_e)[:180]}
+
+    support = _safe_num(sig.get('support'), 0.0)
+    resist = _safe_num(sig.get('resist'), 0.0)
+    price = _safe_num(sig.get('price'), 0.0)
+    breakout_ctx = {
+        'support': _safe_round_metric(support, 8),
+        'resistance': _safe_round_metric(resist, 8),
+        'distance_to_support_pct': _safe_round_metric(((price - support) / max(price, 1e-9) * 100.0) if support > 0 and price > 0 else 0.0, 3),
+        'distance_to_resistance_pct': _safe_round_metric(((resist - price) / max(price, 1e-9) * 100.0) if resist > 0 and price > 0 else 0.0, 3),
+    }
+
+    return {
+        'style': {
+            'holding_period': 'short_term_intraday',
+            'trade_goal': 'short_term_perpetual_futures_entry',
+            'decision_priority': 'entry_timing_momentum_structure_risk',
+            'notes': [
+                'This payload is for short-term crypto perpetual trading, not long-term investing.',
+                'Use the multi-timeframe market structure and the latest closed candle shape heavily.',
+                'Leverage is fixed by the bot to exchange max; do not become conservative by reducing leverage.',
+            ],
+        },
+        'signal_context': {
+            'symbol': symbol,
+            'side': side,
+            'score': _safe_round_metric(sig.get('score'), 4),
+            'raw_score': _safe_round_metric(sig.get('raw_score', sig.get('score')), 4),
+            'priority_score': _safe_round_metric(sig.get('priority_score'), 4),
+            'entry_quality': _safe_round_metric(sig.get('entry_quality'), 4),
+            'rr_ratio': _safe_round_metric(sig.get('rr_ratio'), 4),
+            'setup_label': str(sig.get('setup_label') or ''),
+            'signal_grade': str(sig.get('signal_grade') or ''),
+            'regime': str(sig.get('regime') or ''),
+            'regime_confidence': _safe_round_metric(sig.get('regime_confidence'), 4),
+            'trend_confidence': _safe_round_metric(sig.get('trend_confidence'), 4),
+            'rotation_adj': _safe_round_metric(sig.get('rotation_adj'), 4),
+            'score_jump': _safe_round_metric(sig.get('score_jump'), 4),
+            'atr_15m': _safe_round_metric(sig.get('atr15'), 8),
+            'atr_4h': _safe_round_metric(sig.get('atr4h'), 8),
+        },
+        'market_state': {
+            'broad_market': dict(market_info or {}),
+            'ticker': ticker_context,
+            'support_resistance': breakout_ctx,
+        },
+        'multi_timeframe': tf_data,
+        'pre_breakout_radar': radar,
+        'execution_context': execution_context,
+        'execution_policy': {
+            'fixed_leverage': int(constraints.get('fixed_leverage', constraints.get('max_leverage', 1)) or 1),
+            'leverage_mode': str(constraints.get('leverage_policy') or 'always_use_exchange_max'),
+            'min_order_margin_usdt': _safe_round_metric(constraints.get('min_order_margin_usdt', 0.1), 4),
+            'margin_pct_range': [
+                _safe_round_metric(constraints.get('min_margin_pct', MIN_MARGIN_PCT), 4),
+                _safe_round_metric(constraints.get('max_margin_pct', MAX_MARGIN_PCT), 4),
+            ],
+        },
+    }
+
+
 def _consult_openai_trade_for_signal(sig, rank_index, top_rows, market_info, risk_status, portfolio):
     top_candidates = []
     for row in list(top_rows or [])[:5]:
@@ -6783,14 +6925,21 @@ def _consult_openai_trade_for_signal(sig, rank_index, top_rows, market_info, ris
             'entry_quality': round(float(row.get('entry_quality', 0) or 0), 2),
             'rr_ratio': round(float(row.get('rr_ratio', 0) or 0), 2),
         })
+    fixed_leverage = _get_symbol_max_leverage(sig.get('symbol'))
+    sig = dict(sig or {})
     constraints = {
         'min_margin_pct': max(MIN_MARGIN_PCT, float(OPENAI_TRADE_CONFIG.get('min_margin_pct', MIN_MARGIN_PCT) or MIN_MARGIN_PCT)),
         'max_margin_pct': min(MAX_MARGIN_PCT, float(OPENAI_TRADE_CONFIG.get('max_margin_pct', MAX_MARGIN_PCT) or MAX_MARGIN_PCT)),
-        'min_leverage': max(1, int(OPENAI_TRADE_CONFIG.get('min_leverage', 4) or 4)),
-        'max_leverage': max(1, int(OPENAI_TRADE_CONFIG.get('max_leverage', 25) or 25)),
+        'min_leverage': fixed_leverage,
+        'max_leverage': fixed_leverage,
+        'fixed_leverage': fixed_leverage,
+        'leverage_policy': 'always_use_exchange_max',
+        'min_order_margin_usdt': 0.1,
+        'trade_style': 'short_term_intraday',
         'max_open_positions': MAX_OPEN_POSITIONS,
         'max_same_direction': MAX_SAME_DIRECTION,
     }
+    sig['openai_market_context'] = _build_openai_short_term_context(sig, market_info, constraints)
     candidate = build_openai_trade_candidate(
         signal=sig,
         market=market_info,
@@ -8553,35 +8702,173 @@ def _safe_fetch_ohlcv_df(symbol, timeframe, limit):
         return None
 
 
+def _safe_round_metric(value, digits=6, default=0.0):
+    try:
+        v = float(value)
+        if math.isnan(v) or math.isinf(v):
+            v = float(default)
+        return round(v, digits)
+    except Exception:
+        return round(float(default), digits)
+
+
+def _candle_shape_from_row(row):
+    if row is None:
+        return {}
+    try:
+        o = float(row['o'])
+        h = float(row['h'])
+        l = float(row['l'])
+        c = float(row['c'])
+        v = float(row['v'])
+    except Exception:
+        return {}
+    candle_range = max(h - l, 1e-9)
+    body = abs(c - o)
+    upper_wick = max(h - max(o, c), 0.0)
+    lower_wick = max(min(o, c) - l, 0.0)
+    body_pct = body / candle_range
+    upper_pct = upper_wick / candle_range
+    lower_pct = lower_wick / candle_range
+    close_pos = (c - l) / candle_range
+    direction = 'bullish' if c > o else 'bearish' if c < o else 'flat'
+
+    if body_pct <= 0.18:
+        shape = 'doji'
+    elif lower_pct >= 0.42 and upper_pct <= 0.20:
+        shape = 'hammer' if direction == 'bullish' else 'hanging_man'
+    elif upper_pct >= 0.42 and lower_pct <= 0.20:
+        shape = 'shooting_star' if direction == 'bearish' else 'inverted_hammer'
+    elif body_pct >= 0.72 and upper_pct <= 0.12 and lower_pct <= 0.12:
+        shape = 'marubozu'
+    elif body_pct >= 0.52:
+        shape = 'strong_body'
+    else:
+        shape = 'mixed_body'
+
+    return {
+        'open': _safe_round_metric(o, 8),
+        'high': _safe_round_metric(h, 8),
+        'low': _safe_round_metric(l, 8),
+        'close': _safe_round_metric(c, 8),
+        'volume': _safe_round_metric(v, 4),
+        'direction': direction,
+        'shape': shape,
+        'body_pct': _safe_round_metric(body_pct * 100.0, 2),
+        'upper_wick_pct': _safe_round_metric(upper_pct * 100.0, 2),
+        'lower_wick_pct': _safe_round_metric(lower_pct * 100.0, 2),
+        'range_pct_of_price': _safe_round_metric(candle_range / max(c, 1e-9) * 100.0, 3),
+        'close_position_pct': _safe_round_metric(close_pos * 100.0, 2),
+    }
+
+
+def _ema_stack_label(last, ema9, ema20, ema50, ema200=None):
+    ema200 = float(ema200 or ema50 or last)
+    if last >= ema9 >= ema20 >= ema50 >= ema200:
+        return 'strong_uptrend'
+    if last >= ema9 >= ema20 >= ema50:
+        return 'uptrend'
+    if last <= ema9 <= ema20 <= ema50 <= ema200:
+        return 'strong_downtrend'
+    if last <= ema9 <= ema20 <= ema50:
+        return 'downtrend'
+    if last >= ema20 >= ema50:
+        return 'recovery_up'
+    if last <= ema20 <= ema50:
+        return 'recovery_down'
+    return 'mixed'
+
+
 def _snapshot_from_df(df):
     if df is None or len(df) < 20:
         return None
-    c = df['c'].astype(float)
-    h = df['h'].astype(float)
-    l = df['l'].astype(float)
-    v = df['v'].astype(float)
+    closed_df = df.iloc[:-1].copy() if len(df) >= 30 else df.copy()
+    if closed_df is None or len(closed_df) < 20:
+        closed_df = df.copy()
+    c = closed_df['c'].astype(float)
+    o = closed_df['o'].astype(float)
+    h = closed_df['h'].astype(float)
+    l = closed_df['l'].astype(float)
+    v = closed_df['v'].astype(float)
     last = float(c.iloc[-1])
+    prev = float(c.iloc[-2]) if len(c) >= 2 else last
     atr = safe_last(ta.atr(h, l, c, length=14), 0)
+    ema9 = safe_last(ta.ema(c, length=9), last)
     ema20 = safe_last(ta.ema(c, length=20), last)
     ema50 = safe_last(ta.ema(c, length=50), last)
+    ema200 = safe_last(ta.ema(c, length=200), ema50 if len(c) >= 60 else last)
     rsi = safe_last(ta.rsi(c, length=14), 50)
     adx_df = ta.adx(h, l, c, length=14)
     adx = safe_last(adx_df.iloc[:, 0], 0) if adx_df is not None and not adx_df.empty else 0
+    plus_di = safe_last(adx_df.iloc[:, 1], 0) if adx_df is not None and adx_df.shape[1] >= 2 else 0
+    minus_di = safe_last(adx_df.iloc[:, 2], 0) if adx_df is not None and adx_df.shape[1] >= 3 else 0
+    macd_df = ta.macd(c, fast=12, slow=26, signal=9)
+    macd = safe_last(macd_df.iloc[:, 0], 0) if macd_df is not None and not macd_df.empty else 0
+    macd_signal = safe_last(macd_df.iloc[:, 1], 0) if macd_df is not None and macd_df.shape[1] >= 2 else 0
+    macd_hist = safe_last(macd_df.iloc[:, 2], 0) if macd_df is not None and macd_df.shape[1] >= 3 else 0
+    bb = ta.bbands(c, length=20, std=2.0)
+    bb_upper = safe_last(bb.iloc[:, 0], last) if bb is not None and not bb.empty else last
+    bb_mid = safe_last(bb.iloc[:, 1], last) if bb is not None and bb.shape[1] >= 2 else last
+    bb_lower = safe_last(bb.iloc[:, 2], last) if bb is not None and bb.shape[1] >= 3 else last
+    bb_width_pct = (bb_upper - bb_lower) / max(last, 1e-9) * 100.0
+    bb_pos = (last - bb_lower) / max(bb_upper - bb_lower, 1e-9)
+    stoch_df = ta.stoch(h, l, c, k=14, d=3, smooth_k=3)
+    stoch_k = safe_last(stoch_df.iloc[:, 0], 50) if stoch_df is not None and not stoch_df.empty else 50
+    stoch_d = safe_last(stoch_df.iloc[:, 1], 50) if stoch_df is not None and stoch_df.shape[1] >= 2 else 50
     vol_ratio = float(v.tail(5).mean()) / max(float(v.tail(30).mean()), 1e-9)
-    ret = 0.0
+    ret_3 = 0.0
+    ret_12 = 0.0
+    ret_24 = 0.0
+    if len(c) >= 4:
+        base = float(c.iloc[-4])
+        ret_3 = (last - base) / max(base, 1e-9) * 100.0
+    if len(c) >= 13:
+        base = float(c.iloc[-13])
+        ret_12 = (last - base) / max(base, 1e-9) * 100.0
     if len(c) >= 25:
         base = float(c.iloc[-25])
-        ret = (last - base) / max(base, 1e-9) * 100
+        ret_24 = (last - base) / max(base, 1e-9) * 100.0
+    last_closed_candle = _candle_shape_from_row(closed_df.iloc[-1])
+    recent_closed = []
+    for _, row in closed_df.tail(3).iterrows():
+        recent_closed.append(_candle_shape_from_row(row))
+    swing_high_20 = float(h.tail(20).max()) if len(h) >= 20 else float(h.max())
+    swing_low_20 = float(l.tail(20).min()) if len(l) >= 20 else float(l.min())
     return {
-        'bars': int(len(df)),
-        'last_close': round(last, 6),
-        'atr': round(float(atr or 0), 6),
-        'rsi': round(float(rsi or 0), 2),
-        'adx': round(float(adx or 0), 2),
-        'ema20': round(float(ema20 or 0), 6),
-        'ema50': round(float(ema50 or 0), 6),
-        'ret_24bars_pct': round(ret, 2),
-        'vol_ratio': round(vol_ratio, 2),
+        'bars': int(len(closed_df)),
+        'last_close': _safe_round_metric(last, 8),
+        'prev_close': _safe_round_metric(prev, 8),
+        'atr': _safe_round_metric(float(atr or 0), 8),
+        'atr_pct': _safe_round_metric(float(atr or 0) / max(last, 1e-9) * 100.0, 3),
+        'rsi': _safe_round_metric(float(rsi or 0), 2),
+        'adx': _safe_round_metric(float(adx or 0), 2),
+        'plus_di': _safe_round_metric(float(plus_di or 0), 2),
+        'minus_di': _safe_round_metric(float(minus_di or 0), 2),
+        'ema9': _safe_round_metric(float(ema9 or 0), 8),
+        'ema20': _safe_round_metric(float(ema20 or 0), 8),
+        'ema50': _safe_round_metric(float(ema50 or 0), 8),
+        'ema200': _safe_round_metric(float(ema200 or 0), 8),
+        'trend_label': _ema_stack_label(last, ema9, ema20, ema50, ema200),
+        'macd': _safe_round_metric(float(macd or 0), 8),
+        'macd_signal': _safe_round_metric(float(macd_signal or 0), 8),
+        'macd_hist': _safe_round_metric(float(macd_hist or 0), 8),
+        'bb_upper': _safe_round_metric(float(bb_upper or 0), 8),
+        'bb_mid': _safe_round_metric(float(bb_mid or 0), 8),
+        'bb_lower': _safe_round_metric(float(bb_lower or 0), 8),
+        'bb_width_pct': _safe_round_metric(bb_width_pct, 3),
+        'bb_position_pct': _safe_round_metric(bb_pos * 100.0, 2),
+        'stoch_k': _safe_round_metric(float(stoch_k or 0), 2),
+        'stoch_d': _safe_round_metric(float(stoch_d or 0), 2),
+        'ret_3bars_pct': _safe_round_metric(ret_3, 2),
+        'ret_12bars_pct': _safe_round_metric(ret_12, 2),
+        'ret_24bars_pct': _safe_round_metric(ret_24, 2),
+        'vol_ratio': _safe_round_metric(vol_ratio, 2),
+        'swing_high_20': _safe_round_metric(swing_high_20, 8),
+        'swing_low_20': _safe_round_metric(swing_low_20, 8),
+        'distance_to_swing_high_pct': _safe_round_metric((swing_high_20 - last) / max(last, 1e-9) * 100.0, 3),
+        'distance_to_swing_low_pct': _safe_round_metric((last - swing_low_20) / max(last, 1e-9) * 100.0, 3),
+        'last_closed_candle': last_closed_candle,
+        'recent_closed_candles': recent_closed,
     }
 
 
