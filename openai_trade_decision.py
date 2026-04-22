@@ -385,7 +385,6 @@ def _build_request_body(candidate: Dict[str, Any], config: Dict[str, Any], *, st
                 'strict': True,
             }
         }
-        body['temperature'] = float(config.get('temperature', 0.2) or 0.2)
     else:
         body['text'] = {
             'format': {
