@@ -61,7 +61,7 @@ def default_trade_config(env_getter: Callable[[str, str], str]) -> Dict[str, Any
         'request_timeout_sec': max(_env_float(env_getter, 'OPENAI_TRADE_TIMEOUT_SEC', 45.0), 5.0),
         'temperature': 0.2,
         'base_url': str(env_getter('OPENAI_RESPONSES_URL', 'https://api.openai.com/v1/responses') or 'https://api.openai.com/v1/responses').strip(),
-        'reasoning_effort': str(env_getter('OPENAI_TRADE_REASONING_EFFORT', 'low') or 'low').strip(),
+        'reasoning_effort': str(env_getter('OPENAI_TRADE_REASONING_EFFORT', 'medium') or 'medium').strip(),
         'retry_reasoning_effort': str(env_getter('OPENAI_TRADE_RETRY_REASONING_EFFORT', '') or '').strip(),
         'advice_ttl_minutes': max(_env_int(env_getter, 'OPENAI_TRADE_ADVICE_TTL_MINUTES', 240), 15),
     }
@@ -497,6 +497,9 @@ def _build_messages(candidate: Dict[str, Any]) -> list[Dict[str, Any]]:
         'Do not write hidden chain-of-thought; decide from the supplied fields and output JSON immediately. '
         'Evaluate structure, trigger quality, liquidity, stop placement, and whether the move is better handled as a pullback limit order or an aggressive market chase. '
         'Use numeric evidence first: trend alignment, entry quality, RR, liquidity/spread, volatility, portfolio exposure, and invalidation distance. '
+        'Prefer precise execution over narrative: produce one best executable plan, with exact prices anchored to supplied structure, not vague zones unless the watch plan is intentionally zone-based. '
+        'Optimize for practical win rate and clean expectancy, but stay only slightly conservative: avoid low-quality chasing, while still approving strong or reasonably clean pullback entries instead of becoming overly timid. '
+        'When the setup is decent but a little extended, prefer a precise wait-for-pullback or wait-for-confirmation plan rather than rejecting a still-viable thesis. '
         'Approve only when the setup remains tradable after those checks; otherwise return should_trade=false with a specific skip reason. '
         'Be aggressive but not reckless: when the setup is genuinely strong, do not become timid; when the setup is messy, explicitly stand down. '
         'Assume the bot will execute with the exchange maximum leverage for this symbol. '
@@ -515,6 +518,15 @@ def _build_messages(candidate: Dict[str, Any]) -> list[Dict[str, Any]]:
         f'- the bot can go as low as {min_order_margin_usdt:.4f} USDT minimum margin floor, but do not choose timid sizing when the setup is strong\n'
         '- order_type must be market or limit\n'
         '- stop_loss and take_profit must be valid for the side and are mandatory exchange protection orders\n'
+        '- use the candidate entry_price / stop_loss / take_profit, market_context levels, latest candle, and execution quality as the primary anchors; only deviate when structure clearly justifies it\n'
+        '- choose the single highest-quality executable path right now: either market now, limit at a precise pullback/retest, or no trade yet with a precise recheck trigger\n'
+        '- be slightly selective, not overly selective: if the thesis is still good but current price is a bit stretched, prefer a better limit entry or confirmation trigger instead of a blanket rejection\n'
+        '- entry_price must be a real actionable price, not a storytelling placeholder; avoid loose round-number guesses unless the payload structure supports them\n'
+        '- stop_loss must sit beyond the actual invalidation level, not so tight that normal noise breaks it and not so wide that RR becomes poor\n'
+        '- take_profit should target the most realistic first expansion / liquidity / support-resistance objective for a short-term trade, then allow runners via hints if appropriate\n'
+        '- do not approve trades with weak reward-to-risk, poor liquidity, or invalidation too far from the entry unless a very strong momentum continuation case exists\n'
+        '- if order_type is market, approve only when immediate execution quality is still acceptable and waiting would likely reduce edge\n'
+        '- if order_type is limit, place the limit where a pullback/retest would still preserve the structure edge; do not put it so far away that the thesis materially changes\n'
         '- you may optionally suggest trailing hints via trail_trigger_atr_hint / trail_pct_hint / breakeven_atr_hint / dynamic_take_profit_hint; these are advisory only\n'
         '- market_read should summarize what the market is doing right now in a tactical short-term way\n'
         '- entry_plan should say exactly why entry is market/limit and what price behavior you want\n'
@@ -527,6 +539,8 @@ def _build_messages(candidate: Dict[str, Any]) -> list[Dict[str, Any]]:
         '- use pullback_to_entry when waiting for a limit pullback, breakout_reclaim / breakdown_confirm when waiting for continuation confirmation, volume_confirmation when waiting for participation, manual_review when the condition is qualitative\n'
         '- provide detailed bot-readable observation guidance: watch_timeframe, watch_price_zone_low/high, watch_structure_condition, watch_volume_condition, watch_checklist, watch_confirmations, watch_invalidations, and watch_recheck_priority 0-100\n'
         '- watch_checklist should be concrete items the bot/user can observe; watch_confirmations should describe what makes the setup worth rechecking; watch_invalidations should describe what cancels the idea\n'
+        '- if not trading yet, keep the watch plan narrow and actionable: one primary trigger, one invalidation, one realistic recheck reason, and a small price zone when relevant\n'
+        '- if force_recheck is true and the previously requested condition is now met, do not lazily repeat the old watch plan; either upgrade to a tradable plan or explain the one missing factor still preventing execution\n'
         '- if no practical watch condition exists, use watch_trigger_type none and trigger/invalidation prices 0\n'
         '- the bot will store watch_* fields and ask again only when the condition appears, so make the trigger precise and cost-efficient\n'
         '- confidence should be 0-100\n'
