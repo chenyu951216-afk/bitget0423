@@ -32,7 +32,7 @@ RISK_POLICY: Dict[str, Any] = {
     'atr_risk_pct': 0.01,
     'min_margin_pct': 0.01,
     'max_margin_pct': 0.08,
-    'max_open_positions': 7,
+    'max_open_positions': 15,
     'max_same_direction': 5,
     'time_stop_bars_15m': 15,
 }
