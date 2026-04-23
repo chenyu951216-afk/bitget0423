@@ -6511,48 +6511,22 @@ def place_order(sig):
             with _ORDERED_LOCK:
                 _ORDERED_THIS_SCAN.discard(sym_check)
             return
-        # 向 Bitget 確認並設定最高槓桿
+        # 下單前強制把該幣槓桿設定到 Bitget 可開的最大值
         lev = _get_symbol_max_leverage(sym)
-        requested_lev = 0
         try:
-            mkt  = exchange.market(sym)
-            info = mkt.get('info', {})
-            # Bitget 合約最大槓桿欄位（優先順序）
-            for field in ['maxLeverage','maxLev','leverageMax']:
-                val = info.get(field)
-                if val:
-                    try:
-                        lev = int(float(str(val)))
-                        if lev > 1:
-                            break
-                    except:
-                        pass
-            # 備用：从 limits 取
-            if lev <= 20:
-                try:
-                    lev = int(mkt.get('limits',{}).get('leverage',{}).get('max', 20))
-                except:
-                    pass
-            # 備用：fetch_leverage_tiers 取精確最大值
-            if lev <= 20:
-                try:
-                    tiers = exchange.fetch_leverage_tiers([sym])
-                    sym_tiers = tiers.get(sym, [])
-                    if sym_tiers:
-                        lev = int(max(t.get('maxLeverage', 20) for t in sym_tiers))
-                except:
-                    pass
-            lev = max(lev, 1)
-            if requested_lev > 0:
-                lev = min(lev, max(requested_lev, 1))
-            exchange.set_leverage(lev, sym)
-            print("槓桿設定: {} {}x".format(sym, lev))
+            lev, lev_params, lev_err, lev_ok = _force_set_symbol_max_leverage(sym, side)
+            if not lev_ok:
+                raise RuntimeError(lev_err or 'failed to force max leverage on Bitget')
+            sig['resolved_max_leverage'] = lev
+            if openai_plan:
+                openai_plan['leverage'] = lev
+                sig['openai_trade_plan'] = openai_plan
+            print("槓桿設定: {} {}x {}".format(sym, lev, ('params={}'.format(lev_params) if lev_params else '')))
         except Exception as lev_e:
-            print("槓桿設定失敗({}): {} 保持{}x".format(sym, lev_e, lev))
-            try:
-                exchange.set_leverage(lev, sym)
-            except:
-                pass
+            print("槓桿設定失敗({}): {} | 取消下單".format(sym, lev_e))
+            with _ORDERED_LOCK:
+                _ORDERED_THIS_SCAN.discard(sym_check)
+            return
 
         # 動態保證金：根據分數 / 蓄勢 / 波動 / 同向持倉，自動決定 3%~8%
         with STATE_LOCK: equity=STATE["equity"]
@@ -6803,6 +6777,30 @@ def _get_symbol_max_leverage(symbol):
     except Exception:
         pass
     return max(int(lev or 1), 1)
+
+
+def _force_set_symbol_max_leverage(symbol, side):
+    pos_side = 'long' if str(side or '').lower() in ('buy', 'long') else 'short'
+    lev = _get_symbol_max_leverage(symbol)
+    attempts = [
+        {},
+        {'tdMode': 'cross', 'holdSide': pos_side},
+        {'marginMode': 'cross', 'holdSide': pos_side},
+        {'tdMode': 'cross', 'posSide': pos_side},
+        {'marginMode': 'cross', 'posSide': pos_side},
+    ]
+    errors = []
+    for params in attempts:
+        try:
+            if params:
+                exchange.set_leverage(lev, symbol, params)
+            else:
+                exchange.set_leverage(lev, symbol)
+            return lev, params, '', True
+        except Exception as e:
+            errors.append(str(e))
+            continue
+    return lev, {}, ' | '.join(errors[:3]), False
 
 
 def _build_openai_short_term_context(sig, market_info, constraints):
