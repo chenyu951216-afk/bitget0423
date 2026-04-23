@@ -364,6 +364,7 @@ def _build_messages(candidate: Dict[str, Any]) -> list[Dict[str, Any]]:
     max_leverage = int(constraints.get('max_leverage', 25) or 25)
     fixed_leverage = int(constraints.get('fixed_leverage', max_leverage) or max_leverage)
     min_order_margin_usdt = float(constraints.get('min_order_margin_usdt', 0.1) or 0.1)
+    fixed_order_notional_usdt = float(constraints.get('fixed_order_notional_usdt', 20.0) or 20.0)
     trade_style = str(candidate.get('trade_style') or constraints.get('trade_style') or 'short_term_intraday')
     system_text = (
         'You are a crypto perpetual futures execution planner for short-term trading. '
@@ -383,6 +384,7 @@ def _build_messages(candidate: Dict[str, Any]) -> list[Dict[str, Any]]:
         f'Hard bounds:\n- leverage must be between {min_leverage} and {max_leverage}\n'
         f'- margin_pct must be between {min_margin_pct:.4f} and {max_margin_pct:.4f}\n'
         f'- actual execution leverage is fixed to {fixed_leverage}x (exchange maximum), so return that leverage value\n'
+        f'- actual execution notional is fixed to {fixed_order_notional_usdt:.4f} USDT per order\n'
         f'- the bot can go as low as {min_order_margin_usdt:.4f} USDT minimum margin floor, but do not choose timid sizing when the setup is strong\n'
         '- order_type must be market or limit\n'
         '- stop_loss and take_profit must be valid for the side\n'
