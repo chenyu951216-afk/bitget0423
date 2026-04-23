@@ -7365,6 +7365,8 @@ def scan_thread():
                             reasons.append('未達OpenAI送審分數')
                         elif openai_status == 'error':
                             reasons.append('OpenAI呼叫失敗，本輪不下單')
+                        elif openai_status == 'empty_response':
+                            reasons.append('OpenAI空回覆，已記錄成本並進入冷卻')
                     elif openai_status == 'missing_api_key':
                         reasons.append('尚未設定 OPENAI_API_KEY，暫用規則引擎')
                     reasons = list(dict.fromkeys(reasons))
@@ -7410,6 +7412,7 @@ def scan_thread():
                             'permission_error': 'OpenAI 權限不足',
                             'bad_request': 'OpenAI 請求格式錯誤',
                             'rate_limit': 'OpenAI 速率限制',
+                            'empty_response': 'OpenAI 空回覆',
                             'below_min_score': '分數太低',
                             'local_gate_block': '本地風控阻擋',
                             'error': 'OpenAI錯誤',
