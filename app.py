@@ -7252,11 +7252,15 @@ def scan_thread():
                         ).start()
 
             # ── 正常開倉邏輯（下單間隔5秒，避免rate limit）──
-            # 下單只取分數前 7，排行榜顯示 10 個但短線總倉上限仍為 7
-            top7_for_order = sorted(top10, key=lambda x:(x.get('priority_score', abs(x['score'])), abs(x['score'])), reverse=True)[:MAX_OPEN_POSITIONS]
+            # OpenAI 最多輪流檢查排行榜前 10；實際持倉仍受 MAX_OPEN_POSITIONS / 風控限制。
+            top10_for_order = sorted(top10, key=lambda x:(x.get('priority_score', abs(x['score'])), abs(x['score'])), reverse=True)[:10]
             if pos_cnt < MAX_OPEN_POSITIONS:
                 order_delay = 0
-                for rank_index, best in enumerate(top7_for_order):
+                openai_sent_this_scan = 0
+                openai_rank_limit = min(max(int(OPENAI_TRADE_CONFIG.get('top_k_per_scan', 10) or 10), 1), 10)
+                openai_sends_per_scan = max(int(OPENAI_TRADE_CONFIG.get('sends_per_scan', 1) or 1), 1)
+                openai_now_ts = time.time()
+                for rank_index, best in enumerate(top10_for_order):
                     # 大盤方向過濾
                     with MARKET_LOCK:
                         mkt_dir = MARKET_STATE.get("direction", "中性")
@@ -7305,9 +7309,25 @@ def scan_thread():
                         hard_gate_reasons.append('該幣歷史表現被封鎖')
 
                     openai_mode_active = bool(OPENAI_TRADE_CONFIG.get('enabled', True) and OPENAI_API_KEY)
+                    if not openai_mode_active and rank_index >= MAX_OPEN_POSITIONS:
+                        allow_now = False
+                        hard_gate_reasons.append('超出規則引擎下單前{}名'.format(MAX_OPEN_POSITIONS))
                     if openai_mode_active:
                         allow_now = False
-                        if rank_index < int(OPENAI_TRADE_CONFIG.get('top_k_per_scan', 5) or 5) and not hard_gate_reasons:
+                        try:
+                            sym_state = dict((OPENAI_TRADE_STATE.get('symbols') or {}).get(best['symbol'], {}) or {})
+                            last_sent_ts = float(sym_state.get('last_sent_ts', 0) or 0)
+                            cooldown_sec = max(int(OPENAI_TRADE_CONFIG.get('cooldown_minutes', 180) or 180), 1) * 60
+                            openai_recently_sent = bool(last_sent_ts > 0 and (openai_now_ts - last_sent_ts) < cooldown_sec)
+                        except Exception:
+                            openai_recently_sent = False
+                        can_send_openai = (
+                            rank_index < openai_rank_limit and
+                            openai_sent_this_scan < openai_sends_per_scan and
+                            not openai_recently_sent and
+                            not hard_gate_reasons
+                        )
+                        if can_send_openai:
                             risk_snapshot = get_risk_status()
                             portfolio = {
                                 'equity': STATE.get('equity', 0),
@@ -7318,7 +7338,7 @@ def scan_thread():
                             _candidate, openai_result = _consult_openai_trade_for_signal(
                                 best,
                                 rank_index,
-                                top7_for_order,
+                                top10_for_order,
                                 dict(MARKET_STATE),
                                 risk_snapshot,
                                 portfolio,
@@ -7326,13 +7346,22 @@ def scan_thread():
                             openai_status = str(openai_result.get('status') or 'unknown')
                             openai_decision = dict(openai_result.get('decision') or {})
                             openai_panel = sync_openai_trade_state(push_runtime=False)
+                            if openai_status not in ('not_ranked', 'below_min_score', 'cooldown_active', 'global_interval_active', 'budget_paused', 'local_gate_block'):
+                                openai_sent_this_scan += 1
                             if openai_status in ('consulted', 'cached_reuse') and openai_decision:
                                 decision_source = 'openai'
                                 allow_now = bool(openai_decision.get('should_trade'))
                                 if allow_now:
                                     _apply_openai_trade_plan_to_signal(best, openai_decision, openai_result)
                         else:
-                            openai_status = 'not_ranked' if rank_index >= int(OPENAI_TRADE_CONFIG.get('top_k_per_scan', 5) or 5) else 'local_gate_block'
+                            if rank_index >= openai_rank_limit:
+                                openai_status = 'not_ranked'
+                            elif hard_gate_reasons:
+                                openai_status = 'local_gate_block'
+                            elif openai_recently_sent:
+                                openai_status = 'cooldown_active'
+                            else:
+                                openai_status = 'review_deferred'
                     elif OPENAI_TRADE_CONFIG.get('enabled', True):
                         openai_status = 'missing_api_key'
 
@@ -7341,7 +7370,7 @@ def scan_thread():
                     if hard_gate_reasons:
                         reasons.extend(hard_gate_reasons)
                     if openai_mode_active:
-                        reasons.append('OpenAI候選篩選前{}名'.format(int(OPENAI_TRADE_CONFIG.get('top_k_per_scan', 5) or 5)))
+                        reasons.append('OpenAI候選輪轉前{}名，本輪最多送{}個'.format(openai_rank_limit, openai_sends_per_scan))
                         if openai_status == 'not_ranked':
                             reasons.append('未進入OpenAI決策名單')
                         elif openai_status == 'local_gate_block':
@@ -7367,6 +7396,8 @@ def scan_thread():
                             reasons.append('OpenAI呼叫失敗，本輪不下單')
                         elif openai_status == 'empty_response':
                             reasons.append('OpenAI空回覆，已記錄成本並進入冷卻')
+                        elif openai_status == 'review_deferred':
+                            reasons.append('本輪OpenAI送審名額已用，下一輪繼續往後送')
                     elif openai_status == 'missing_api_key':
                         reasons.append('尚未設定 OPENAI_API_KEY，暫用規則引擎')
                     reasons = list(dict.fromkeys(reasons))
@@ -7413,6 +7444,7 @@ def scan_thread():
                             'bad_request': 'OpenAI 請求格式錯誤',
                             'rate_limit': 'OpenAI 速率限制',
                             'empty_response': 'OpenAI 空回覆',
+                            'review_deferred': '待下輪送審',
                             'below_min_score': '分數太低',
                             'local_gate_block': '本地風控阻擋',
                             'error': 'OpenAI錯誤',
