@@ -83,6 +83,7 @@ MAX_OPEN_POSITIONS    = RISK_POLICY['max_open_positions']         # 短線總持
 MAX_SAME_DIRECTION    = RISK_POLICY['max_same_direction']         # 同方向最多 5 筆
 TIME_STOP_BARS_15M    = RISK_POLICY['time_stop_bars_15m']        # 15 根 15m K 仍不走就時間止損
 FIXED_ORDER_NOTIONAL_USDT = 20.0  # 每單固定名目倉位 20U
+FIXED_STOCK_ORDER_NOTIONAL_USDT = 40.0  # 股票/股指類商品固定名目倉位 40U
 NEWS_CACHE_TTL_SEC    = EXECUTION_POLICY['news_cache_ttl_sec']       # 新聞快取 5 分鐘
 ANTI_CHASE_ATR      = max(float(EXECUTION_POLICY.get('anti_chase_atr', 1.25) or 1.25), 1.8)      # AI主控版：追價保護改偏扣分，不硬擋
 BREAKOUT_LOOKBACK   = EXECUTION_POLICY['breakout_lookback']        # 預判暴拉/暴跌的區間觀察根數
@@ -529,6 +530,8 @@ def get_session_status():
     - us_closed: 21:50-22:32 完全停止+平倉
     - us_watch: 22:32前觀察美盤走勢
     """
+    # 時段保護已完全停用，固定回傳正常狀態。
+    return "normal", ""
     tw = get_tw_time()
     h = tw.hour
     m = tw.minute
@@ -563,6 +566,8 @@ def observe_session_market(session="eu"):
     觀察開盤走勢，計算額外評分 (-2 ~ +2)
     邏輯：看 BTC 在觀察期間的漲跌幅
     """
+    # 時段保護已停用，不再做任何觀察、評分或 UI 更新。
+    return
     try:
         ticker = exchange.fetch_ticker("BTC/USDT:USDT")
         price  = float(ticker['last'])
@@ -629,106 +634,13 @@ def observe_session_market(session="eu"):
         print("觀察市場失敗: {}".format(e))
 
 def get_session_score():
-    """取得當前時段的額外評分，隔天2點後自動清零"""
-    with SESSION_LOCK:
-        now_tw   = get_tw_time()
-        today    = tw_today()
-        now_h    = now_tw.hour
-
-        # 每天凌晨2點後清零（隔天重置）
-        for sess in ["eu", "us"]:
-            score_date = SESSION_STATE.get("{}_score_date".format(sess), "")
-            score_val  = SESSION_STATE.get("{}_score".format(sess), 0)
-            if score_val != 0 and score_date:
-                # 如果是昨天的分數且現在超過2點 → 清零
-                if score_date < today and now_h >= 2:
-                    SESSION_STATE["{}_score".format(sess)]      = 0
-                    SESSION_STATE["{}_score_date".format(sess)] = ""
-                    SESSION_STATE["{}_score_time".format(sess)] = ""
-                    print("🔄 {}盤分數已過期（{}），清零".format(
-                        "歐洲" if sess=="eu" else "美洲", score_date))
-
-        return SESSION_STATE.get("eu_score", 0) + SESSION_STATE.get("us_score", 0)
+    """時段保護已停用，不再影響交易分數。"""
+    return 0
 
 def session_monitor_thread():
-    """時段監控執行緒"""
-    prev_status = "normal"
-    closed_positions = False
-
+    """時段保護已停用。"""
     while True:
-        try:
-            status, note = get_session_status()
-            tw = get_tw_time()
-
-            with SESSION_LOCK:
-                SESSION_STATE["session_phase"] = status
-
-            # 歐盤觀察期：每2分鐘記錄一次價格
-            if status == "eu_closed":
-                observe_session_market("eu")
-                closed_positions = False
-
-            # 美盤觀察期：每2分鐘記錄一次價格
-            elif status == "us_closed":
-                observe_session_market("us")
-                closed_positions = False
-
-            # 歐盤觀察結束，重置歐盤記錄
-            elif status == "eu_watch_end" and prev_status == "eu_closed":
-                with SESSION_LOCK:
-                    SESSION_STATE["europe_obs"] = []
-                print("✅ 歐盤觀察結束，分數:{:+d}，恢復交易".format(
-                    SESSION_STATE["eu_score"]))
-
-            # 美盤觀察結束，重置美盤記錄
-            elif status == "us_watch_end" and prev_status == "us_closed":
-                with SESSION_LOCK:
-                    SESSION_STATE["america_obs"] = []
-                print("✅ 美盤觀察結束，分數:{:+d}，恢復交易".format(
-                    SESSION_STATE["us_score"]))
-
-            # 恢復正常時重置分數
-            elif status == "normal" and prev_status not in ("normal", "eu_pause", "us_pause"):
-                with SESSION_LOCK:
-                    SESSION_STATE["eu_score"]  = 0
-                    SESSION_STATE["us_score"]  = 0
-                    SESSION_STATE["europe_obs"] = []
-                    SESSION_STATE["america_obs"] = []
-                print("🔄 時段重置，分數歸零")
-
-            # 平倉邏輯（19:50 和 21:50）
-            if status in ("eu_closed", "us_closed") and not closed_positions:
-                tw_min = tw.hour * 60 + tw.minute
-                if tw_min in range(19*60+50, 19*60+53) or tw_min in range(21*60+50, 21*60+53):
-                    print("🔔 開盤保護：縮倉/平倉處理現有持倉")
-                    try:
-                        positions = exchange.fetch_positions()
-                        for p in positions:
-                            contracts = float(p.get('contracts', 0) or 0)
-                            if abs(contracts) <= 0:
-                                continue
-                            tighten_position_for_session(
-                                p['symbol'],
-                                contracts,
-                                (p.get('side') or '').lower(),
-                                float(p.get('entryPrice', 0) or 0),
-                                float(p.get('markPrice', 0) or 0),
-                            )
-                    except Exception as se:
-                        print("開盤保護倉位處理失敗: {}".format(se))
-                    closed_positions = True
-
-            prev_status = status
-            update_state(session_info={
-                "phase": status,
-                "note":  note,
-                "eu_score": SESSION_STATE.get("eu_score", 0),
-                "us_score": SESSION_STATE.get("us_score", 0),
-            })
-
-        except Exception as e:
-            print("時段監控失敗: {}".format(e))
-        time.sleep(120)  # 每2分鐘檢查一次
+        time.sleep(600)
 
 # =====================================================
 # 大盤走勢分析系統（BTC 日線 + 歷史型態對比）
@@ -1292,32 +1204,17 @@ def check_risk_ok():
             rs["daily_start_equity"] = STATE.get("equity", 0)
             rs["trading_halted"]     = False
             rs["halt_reason"]        = ""
+            rs["cooldown_until"]     = None
+            rs["consecutive_loss"]   = 0
             print("新的一天，重置風控狀態")
 
-        # 冷靜期檢查
-        if rs["cooldown_until"] and datetime.now() < rs["cooldown_until"]:
-            remaining = int((rs["cooldown_until"] - datetime.now()).total_seconds() / 60)
-            return False, "連損冷靜期，剩餘 {} 分鐘".format(remaining)
+        if '總資產虧損已達' in str(rs.get("halt_reason", "") or ''):
+            rs["trading_halted"] = False
+            rs["halt_reason"] = ""
 
-        # 已人工停止
+        # 僅保留人工/系統級停單，例如保護單缺失；移除日損與連虧停單。
         if rs["trading_halted"]:
             return False, rs["halt_reason"]
-
-        # 日虧損上限
-        equity = STATE.get("equity", 0)
-        if equity > 0 and rs["daily_start_equity"] > 0:
-            # 用即時總資產計算虧損%（不是單筆累加）
-            equity_loss_pct = (rs["daily_start_equity"] - equity) / rs["daily_start_equity"]
-            if equity_loss_pct >= MAX_DAILY_LOSS_PCT:
-                rs["trading_halted"] = True
-                rs["halt_reason"] = "總資產虧損已達 {:.1f}%，停止交易".format(equity_loss_pct*100)
-                append_risk_event('trading_halted', {
-                    'equity_loss_pct': round(equity_loss_pct * 100, 4),
-                    'halt_reason': rs["halt_reason"],
-                    'daily_start_equity': float(rs.get('daily_start_equity', 0) or 0),
-                    'equity': float(equity or 0),
-                })
-                return False, rs["halt_reason"]
 
         return True, "正常"
     except Exception as e:
@@ -1331,24 +1228,15 @@ def record_trade_result(pnl_usdt):
         if pnl_usdt < 0:
             rs["daily_loss_usdt"]  += abs(pnl_usdt)
             rs["consecutive_loss"] += 1
+            rs["cooldown_until"] = None
             append_risk_event('trade_loss', {
                 'pnl_usdt': float(pnl_usdt or 0),
                 'daily_loss_usdt': float(rs.get('daily_loss_usdt', 0) or 0),
                 'consecutive_loss': int(rs.get('consecutive_loss', 0) or 0),
             })
-            if rs["consecutive_loss"] >= MAX_CONSECUTIVE_LOSS:
-                from datetime import timedelta
-                rs["cooldown_until"] = datetime.now() + timedelta(minutes=COOLDOWN_MINUTES)
-                rs["consecutive_loss"] = 0
-                append_risk_event('cooldown_started', {
-                    'pnl_usdt': float(pnl_usdt or 0),
-                    'cooldown_minutes': COOLDOWN_MINUTES,
-                    'cooldown_until': rs["cooldown_until"].strftime("%Y-%m-%d %H:%M:%S"),
-                })
-                print("連續虧損 {} 單，進入冷靜期 {} 分鐘".format(
-                    MAX_CONSECUTIVE_LOSS, COOLDOWN_MINUTES))
         else:
             rs["consecutive_loss"] = 0  # 勝利重置連損計數
+            rs["cooldown_until"] = None
             append_risk_event('trade_win_or_flat', {
                 'pnl_usdt': float(pnl_usdt or 0),
                 'daily_loss_usdt': float(rs.get('daily_loss_usdt', 0) or 0),
@@ -1358,9 +1246,10 @@ def get_risk_status():
     """給 UI 顯示用（不用鎖，避免死鎖）"""
     try:
         rs = RISK_STATE  # 直接讀，不加鎖
+        if '總資產虧損已達' in str(rs.get("halt_reason", "") or ''):
+            rs["trading_halted"] = False
+            rs["halt_reason"] = ""
         ok = not rs.get("trading_halted", False)
-        if rs.get("cooldown_until") and datetime.now() < rs["cooldown_until"]:
-            ok = False
         equity = STATE.get("equity", 1)
         start_eq = rs.get("daily_start_equity", equity) or equity
         return {
@@ -1370,7 +1259,7 @@ def get_risk_status():
             "daily_loss_usdt":   round(rs.get("daily_loss_usdt", 0), 2),
             "daily_loss_pct":    round((start_eq - equity) / max(start_eq, 1) * 100, 1) if equity > 0 else 0,
             "max_daily_loss_pct": int(MAX_DAILY_LOSS_PCT * 100),
-            "cooldown_until":    rs["cooldown_until"].strftime("%H:%M") if rs.get("cooldown_until") and datetime.now() < rs["cooldown_until"] else None,
+            "cooldown_until":    None,
             "current_threshold": _DT.get("current", 50),
         }
     except Exception as e:
@@ -2484,7 +2373,7 @@ STATE = {
     "halt_reason":       "",     # 風控停止原因
     "risk_status":       {},     # 風控狀態摘要
     "trailing_info":     {},     # 移動止盈追蹤狀態（給UI顯示）
-    "session_info":      {"phase":"normal","note":"","eu_score":0,"us_score":0},
+    "session_info":      {},
     "market_info":       {"pattern":"初始化中","direction":"中性","btc_price":0,"prediction":""},
     "lt_info":           {"position":None,"entry_price":0,"pnl":0,"pattern":"","prediction":""},
     "fvg_orders":        {},
@@ -3520,6 +3409,128 @@ def build_auto_order_reason(sig, eff_threshold, mkt_ok, side_ok, same_dir_cnt, p
         if note:
             reasons.append(str(note))
     return list(dict.fromkeys(reasons))
+
+
+def coin_selection_edge(sig):
+    try:
+        sig = dict(sig or {})
+        bd = dict(sig.get('breakdown') or {})
+        score = abs(float(sig.get('score', 0) or 0))
+        side = 1 if float(sig.get('score', 0) or 0) >= 0 else -1
+        rr = float(sig.get('rr_ratio', bd.get('RR', 0)) or 0)
+        entry_quality = float(sig.get('entry_quality', bd.get('進場品質', bd.get('EntryQuality', 0))) or 0)
+        regime = str(sig.get('regime') or bd.get('Regime') or 'neutral')
+        setup = str(sig.get('setup_label') or bd.get('Setup') or '')
+        regime_conf = float(sig.get('regime_confidence', bd.get('RegimeConf', bd.get('RegimeConfidence', 0))) or 0)
+        trend_conf = float(sig.get('trend_confidence', bd.get('TrendConfidence', bd.get('方向信心', 0))) or 0)
+        regime_bias = float(sig.get('regime_bias', bd.get('RegimeBias', 0)) or 0)
+        chase = float(bd.get('追價風險', bd.get('ChaseRisk', 0)) or 0)
+        vol_ratio = float(bd.get('VolRatio', bd.get('volume_ratio', 1.0)) or 1.0)
+        marketability = dict(sig.get('marketability') or {})
+        marketability_score = float(marketability.get('score', sig.get('marketability_score', 0.0)) or 0.0)
+        ai_cov = float(bd.get('AIScoreCoverage', 0) or 0)
+        ai_samples = int(bd.get('AISampleCount', 0) or 0)
+
+        edge = 0.0
+        notes = []
+
+        edge += max(0.0, marketability_score - 2.2) * 0.45
+        if marketability_score < 2.2:
+            edge -= 2.0
+            notes.append('marketability_weak')
+        elif marketability_score >= 5.0:
+            notes.append('liquid_active_market')
+
+        if regime == 'trend':
+            edge += 2.2 + min(regime_conf, 1.0) * 1.4
+            notes.append('trend_regime')
+        elif regime == 'news':
+            edge -= 1.6
+            notes.append('news_volatility_penalty')
+        elif regime in ('range', 'neutral_range'):
+            edge -= 0.9
+            notes.append('range_market_penalty')
+        elif regime == 'neutral':
+            edge -= 0.45
+
+        if (side > 0 and regime_bias > 0) or (side < 0 and regime_bias < 0):
+            edge += min(abs(regime_bias) * 0.35, 1.5)
+            notes.append('direction_aligned')
+        elif abs(regime_bias) >= 2:
+            edge -= 1.2
+            notes.append('direction_conflict')
+
+        if trend_conf >= 7:
+            edge += 1.5
+            notes.append('high_trend_confidence')
+        elif trend_conf >= 5:
+            edge += 0.6
+        elif score >= 45:
+            edge -= 0.8
+            notes.append('low_trend_confidence')
+
+        if rr >= 2.0:
+            edge += 1.1
+            notes.append('good_rr')
+        elif rr >= 1.45:
+            edge += 0.45
+        elif rr > 0:
+            edge -= 1.2
+            notes.append('rr_too_thin')
+
+        if entry_quality >= 7:
+            edge += 1.0
+            notes.append('clean_entry')
+        elif entry_quality >= 5:
+            edge += 0.35
+        elif score >= 45:
+            edge -= 0.8
+            notes.append('entry_quality_weak')
+
+        if 1.05 <= vol_ratio <= 3.2:
+            edge += 0.7
+            notes.append('healthy_volume_expansion')
+        elif vol_ratio > 4.2:
+            edge -= 1.0
+            notes.append('volume_climax_risk')
+        elif vol_ratio < 0.75:
+            edge -= 0.55
+
+        if chase >= 6:
+            edge -= 2.2
+            notes.append('anti_chase_penalty')
+        elif chase >= 4:
+            edge -= 0.9
+
+        if bool(bd.get('PreBreakoutScore', 0)) and float(bd.get('PreBreakoutScore', 0) or 0) >= 55:
+            edge += 0.9
+            notes.append('pre_breakout_ready')
+
+        if ai_cov >= 0.35:
+            edge += min(ai_cov * 2.0, 1.3)
+            notes.append('ai_coverage')
+        if ai_samples >= 12:
+            edge += min(ai_samples / 20.0, 1.0)
+            notes.append('ai_sample_support')
+
+        try:
+            strat = _strategy_score_lookup(sig.get('symbol', ''), regime, setup)
+            strat_count = int(strat.get('count', strat.get('trades', 0)) or 0)
+            strat_ev = float(strat.get('ev_per_trade', 0) or 0)
+            strat_wr = float(strat.get('win_rate', 0) or 0)
+            if strat_count >= STRATEGY_CAPITAL_MIN_TRADES and strat_ev > 0 and strat_wr >= 52:
+                edge += min(2.0, strat_ev * 18.0 + (strat_wr - 50.0) * 0.05)
+                notes.append('learned_profitable_symbol')
+            elif strat_count >= STRATEGY_BLOCK_MIN_TRADES and (strat_ev < 0 or strat_wr < 45):
+                edge -= 1.6
+                notes.append('learned_weak_symbol')
+        except Exception:
+            pass
+
+        return round(max(-5.0, min(edge, 8.0)), 3), list(dict.fromkeys(notes))[:8]
+    except Exception:
+        return 0.0, []
+
 
 def safe_last(series, default=0):
     try:
@@ -4744,11 +4755,11 @@ def analyze_fake_breakout(df, directional_bias=0):
 def analyze_legacy_shadow_1(symbol):
     is_major = symbol in MAJOR_COINS  # 是否為主流幣
     try:
-        d15=pd.DataFrame(exchange.fetch_ohlcv(symbol,'15m',limit=100),columns=['t','o','h','l','c','v'])
+        d15=pd.DataFrame(exchange.fetch_ohlcv(symbol,'15m',limit=ANALYZE_15M_LIMIT),columns=['t','o','h','l','c','v'])
         time.sleep(0.2)
-        d4h=pd.DataFrame(exchange.fetch_ohlcv(symbol,'4h', limit=60), columns=['t','o','h','l','c','v'])
+        d4h=pd.DataFrame(exchange.fetch_ohlcv(symbol,'4h', limit=ANALYZE_4H_LIMIT), columns=['t','o','h','l','c','v'])
         time.sleep(0.2)
-        d1d=pd.DataFrame(exchange.fetch_ohlcv(symbol,'1d', limit=50), columns=['t','o','h','l','c','v'])
+        d1d=pd.DataFrame(exchange.fetch_ohlcv(symbol,'1d', limit=ANALYZE_1D_LIMIT), columns=['t','o','h','l','c','v'])
         time.sleep(0.1)
 
         score=0.0; tags=[]; curr=d15['c'].iloc[-1]; breakdown={}
@@ -5290,6 +5301,14 @@ def update_trailing(sym, side, current_price, atr):
                 ts["highest_price"] = current_price
             highest    = ts.get("highest_price", current_price)
             profit_atr = (current_price - entry) / atr_val
+            hint_tp = float(ts.get("dynamic_take_profit_hint", 0) or 0)
+
+            # OpenAI 可提供建議型動態止盈位；命中後只收緊保護，不覆蓋原本系統。
+            if hint_tp > entry and current_price >= hint_tp and not ts.get("dynamic_hint_armed"):
+                ts["dynamic_hint_armed"] = True
+                ts["trail_pct"] = min(float(ts.get("trail_pct", 0.05) or 0.05), 0.03)
+                suggested_sl = max(entry, hint_tp - atr_val * 0.6)
+                ts["initial_sl"] = max(float(ts.get("initial_sl", 0) or 0), min(current_price, suggested_sl))
 
             # ── 分批止盈 ──
             # 目標1：+1.5ATR → 平30%，止損移到保本
@@ -5359,6 +5378,14 @@ def update_trailing(sym, side, current_price, atr):
                 ts["lowest_price"] = current_price
             lowest     = ts.get("lowest_price", current_price)
             profit_atr = (entry - current_price) / atr_val
+            hint_tp = float(ts.get("dynamic_take_profit_hint", 0) or 0)
+
+            # OpenAI 可提供建議型動態止盈位；命中後只收緊保護，不覆蓋原本系統。
+            if 0 < hint_tp < entry and current_price <= hint_tp and not ts.get("dynamic_hint_armed"):
+                ts["dynamic_hint_armed"] = True
+                ts["trail_pct"] = min(float(ts.get("trail_pct", 0.05) or 0.05), 0.03)
+                suggested_sl = min(entry, hint_tp + atr_val * 0.6)
+                ts["initial_sl"] = min(float(ts.get("initial_sl", entry * 9) or entry * 9), max(current_price, suggested_sl))
 
             if profit_atr >= 1.2 and partial_done == 0:
                 ts["partial_done"] = 1
@@ -6264,7 +6291,7 @@ def compute_order_size(sym, entry_price, stop_price, equity, lev, margin_pct=Non
         if stop_dist <= 0:
             stop_dist = entry_price * 0.01
 
-        fixed_notional_usdt = max(float(FIXED_ORDER_NOTIONAL_USDT), 0.1)
+        fixed_notional_usdt = max(float(FIXED_ORDER_NOTIONAL_USDT if _is_crypto_usdt_swap_symbol(sym) else FIXED_STOCK_ORDER_NOTIONAL_USDT), 0.1)
         raw_qty = fixed_notional_usdt / max(entry_price, 1e-9)
 
         try:
@@ -6283,13 +6310,15 @@ def compute_order_size(sym, entry_price, stop_price, equity, lev, margin_pct=Non
         return qty, round(used_margin_usdt, 4), round(est_risk_usdt, 4), round(stop_dist, 6), round(float(used_margin_pct), 4)
     except Exception as e:
         print("倉位計算失敗 {}: {}".format(sym, e))
-        fixed_notional_usdt = max(float(FIXED_ORDER_NOTIONAL_USDT), 0.1)
+        fixed_notional_usdt = max(float(FIXED_ORDER_NOTIONAL_USDT if _is_crypto_usdt_swap_symbol(sym) else FIXED_STOCK_ORDER_NOTIONAL_USDT), 0.1)
         qty = float(exchange.amount_to_precision(sym, fixed_notional_usdt / max(float(entry_price),1e-9)))
         used_margin_usdt = fixed_notional_usdt / max(float(lev), 1.0)
         used_margin_pct = used_margin_usdt / max(float(equity), 1.0)
         return qty, round(used_margin_usdt, 4), 0.0, abs(float(entry_price) - float(stop_price)), round(used_margin_pct, 4)
 
 def tighten_position_for_session(sym, contracts, side, entry_price, mark_price):
+    # 時段保護已停用，不再因特定時段縮倉或平倉。
+    return False
     try:
         pnl_pct = 0.0
         if entry_price and mark_price:
@@ -6319,16 +6348,16 @@ def tighten_position_for_session(sym, contracts, side, entry_price, mark_price):
 def finalize_open_position_entry(sym, side, sig, qty, sl_price, tp_price, lev, order_usdt, est_risk_usdt, used_margin_pct, margin_ctx, protect=True):
     pos_side = 'long' if side == 'buy' else 'short'
     protected_qty = float(qty or 0)
+    openai_plan = dict(sig.get('openai_trade_plan') or {})
+    openai_meta = dict(sig.get('openai_trade_meta') or {})
     if protect:
         sl_ok, tp_ok = ensure_exchange_protection(sym, side, pos_side, protected_qty, sl_price, tp_price)
-        if not sl_ok:
-            print("❌ 交易所止損驗證失敗，立刻市價平倉保護: {}".format(sym))
+        if not (sl_ok and tp_ok):
+            print("❌ 交易所 SL/TP 保護單驗證失敗(sl_ok={} tp_ok={})，立刻市價平倉保護: {}".format(sl_ok, tp_ok, sym))
             close_position(sym, protected_qty, 'long' if side == 'buy' else 'short')
             return False
 
     trade_id = "{}_{}".format(sym.replace('/', '').replace(':', ''), int(time.time()))
-    openai_plan = dict(sig.get('openai_trade_plan') or {})
-    openai_meta = dict(sig.get('openai_trade_meta') or {})
     rec = {
         "symbol": sym,
         "side": "做多" if side == 'buy' else "做空",
@@ -6417,6 +6446,10 @@ def finalize_open_position_entry(sym, side, sig, qty, sl_price, tp_price, lev, o
         save_learn_db(LEARN_DB)
 
     trail_pct = min(max(sig.get('atr', sig['price'] * 0.01) / sig['price'] * 3, 0.03), 0.10)
+    if openai_plan:
+        hint_trail_pct = float(openai_plan.get('trail_pct_hint', 0) or 0)
+        if hint_trail_pct > 0:
+            trail_pct = min(max(hint_trail_pct, 0.01), 0.12)
     with TRAILING_LOCK:
         TRAILING_STATE[sym] = {
             "side": side,
@@ -6431,6 +6464,10 @@ def finalize_open_position_entry(sym, side, sig, qty, sl_price, tp_price, lev, o
             "partial_done": 0,
             "breakdown": dict(sig.get('breakdown') or {}),
             "setup_label": sig.get('setup_label') or sig.get('breakdown', {}).get('Setup', ''),
+            "fixed_tp": tp_price,
+            "breakeven_atr_hint": float(openai_plan.get('breakeven_atr_hint', 0) or 0),
+            "trail_trigger_atr_hint": float(openai_plan.get('trail_trigger_atr_hint', 0) or 0),
+            "dynamic_take_profit_hint": float(openai_plan.get('dynamic_take_profit_hint', 0) or 0),
         }
     record_order_placed()
     print("下單成功: {} {} @{} {}U 風險{}U x{}倍 SL:{} TP:{} 移動回撤:{:.1f}% 來源:{}".format(
@@ -6572,8 +6609,10 @@ def place_order(sig):
 
         # Step1: FVG 最優價判斷
         atr_val  = sig.get('atr', sig['price'] * 0.01)
-        if preferred_order_type == 'limit' and planned_entry_price > 0:
+        if openai_plan and preferred_order_type == 'limit' and planned_entry_price > 0:
             fvg_price, fvg_note = planned_entry_price, 'OpenAI limit entry'
+        elif openai_plan:
+            fvg_price, fvg_note = None, 'OpenAI market entry'
         else:
             fvg_price, fvg_note = get_fvg_entry_price(sym, sig['side'], sig['price'], sig.get('atr15', atr_val))
         print("FVG判斷: {} → {}".format(sym, fvg_note))
@@ -6604,14 +6643,18 @@ def place_order(sig):
                 order = exchange.create_order(sym, 'limit', side, amt, fvg_price, params=order_params)
                 order_id = order.get('id', '')
                 # 重新計算止損止盈基於FVG價，並同步重算倉位
-                sl_atr = sig.get('sl_mult', 2.0) * atr_val
-                tp_atr = sig.get('tp_mult', 3.0) * atr_val
-                if sig['side'] == 'long':
-                    sl_price = round(fvg_price - sl_atr, 6)
-                    tp_price = round(fvg_price + tp_atr, 6)
+                if openai_plan:
+                    sl_price = float(openai_plan.get('stop_loss', sl_price) or sl_price)
+                    tp_price = float(openai_plan.get('take_profit', tp_price) or tp_price)
                 else:
-                    sl_price = round(fvg_price + sl_atr, 6)
-                    tp_price = round(fvg_price - tp_atr, 6)
+                    sl_atr = sig.get('sl_mult', 2.0) * atr_val
+                    tp_atr = sig.get('tp_mult', 3.0) * atr_val
+                    if sig['side'] == 'long':
+                        sl_price = round(fvg_price - sl_atr, 6)
+                        tp_price = round(fvg_price + tp_atr, 6)
+                    else:
+                        sl_price = round(fvg_price + sl_atr, 6)
+                        tp_price = round(fvg_price - tp_atr, 6)
                 sig['stop_loss']   = sl_price
                 sig['take_profit'] = tp_price
                 sig['price']       = fvg_price
@@ -6848,6 +6891,10 @@ def _force_set_symbol_max_leverage(symbol, side):
     return lev, {}, ' | '.join(errors[:3]), False
 
 
+def _fixed_order_notional_usdt_for_symbol(symbol):
+    return float(FIXED_ORDER_NOTIONAL_USDT if _is_crypto_usdt_swap_symbol(symbol) else FIXED_STOCK_ORDER_NOTIONAL_USDT)
+
+
 def _build_openai_short_term_context(sig, market_info, constraints):
     symbol = str(sig.get('symbol') or '')
     side = 'long' if float(sig.get('score', 0) or 0) >= 0 else 'short'
@@ -6907,6 +6954,7 @@ def _build_openai_short_term_context(sig, market_info, constraints):
         'distance_to_support_pct': _safe_round_metric(((price - support) / max(price, 1e-9) * 100.0) if support > 0 and price > 0 else 0.0, 3),
         'distance_to_resistance_pct': _safe_round_metric(((resist - price) / max(price, 1e-9) * 100.0) if resist > 0 and price > 0 else 0.0, 3),
     }
+    reference_context = dict(sig.get('external_reference') or sig.get('reference_context') or sig.get('scanner_reference') or {})
 
     return {
         'style': {
@@ -6917,6 +6965,8 @@ def _build_openai_short_term_context(sig, market_info, constraints):
                 'This payload is for short-term crypto perpetual trading, not long-term investing.',
                 'Use the multi-timeframe market structure and the latest closed candle shape heavily.',
                 'Leverage is fixed by the bot to exchange max; do not become conservative by reducing leverage.',
+                'Aggressive is acceptable only when price structure, liquidity, and trigger quality all align.',
+                'If breakout chasing is justified, define exactly what price confirms the move and where chasing becomes too expensive.',
             ],
         },
         'signal_context': {
@@ -6936,6 +6986,7 @@ def _build_openai_short_term_context(sig, market_info, constraints):
             'score_jump': _safe_round_metric(sig.get('score_jump'), 4),
             'atr_15m': _safe_round_metric(sig.get('atr15'), 8),
             'atr_4h': _safe_round_metric(sig.get('atr4h'), 8),
+            'signal_desc': str(sig.get('desc') or '')[:420],
         },
         'market_state': {
             'broad_market': dict(market_info or {}),
@@ -6945,11 +6996,12 @@ def _build_openai_short_term_context(sig, market_info, constraints):
         'multi_timeframe': tf_data,
         'pre_breakout_radar': radar,
         'execution_context': execution_context,
+        'reference_context': reference_context,
         'execution_policy': {
             'fixed_leverage': int(constraints.get('fixed_leverage', constraints.get('max_leverage', 1)) or 1),
             'leverage_mode': str(constraints.get('leverage_policy') or 'always_use_exchange_max'),
             'min_order_margin_usdt': _safe_round_metric(constraints.get('min_order_margin_usdt', 0.1), 4),
-            'fixed_order_notional_usdt': _safe_round_metric(FIXED_ORDER_NOTIONAL_USDT, 4),
+            'fixed_order_notional_usdt': _safe_round_metric(_fixed_order_notional_usdt_for_symbol(symbol), 4),
             'margin_pct_range': [
                 _safe_round_metric(constraints.get('min_margin_pct', MIN_MARGIN_PCT), 4),
                 _safe_round_metric(constraints.get('max_margin_pct', MAX_MARGIN_PCT), 4),
@@ -6971,6 +7023,7 @@ def _consult_openai_trade_for_signal(sig, rank_index, top_rows, market_info, ris
         })
     fixed_leverage = _get_symbol_max_leverage(sig.get('symbol'))
     sig = dict(sig or {})
+    fixed_order_notional_usdt = _fixed_order_notional_usdt_for_symbol(sig.get('symbol'))
     constraints = {
         'min_margin_pct': max(MIN_MARGIN_PCT, float(OPENAI_TRADE_CONFIG.get('min_margin_pct', MIN_MARGIN_PCT) or MIN_MARGIN_PCT)),
         'max_margin_pct': min(MAX_MARGIN_PCT, float(OPENAI_TRADE_CONFIG.get('max_margin_pct', MAX_MARGIN_PCT) or MAX_MARGIN_PCT)),
@@ -6979,7 +7032,7 @@ def _consult_openai_trade_for_signal(sig, rank_index, top_rows, market_info, ris
         'fixed_leverage': fixed_leverage,
         'leverage_policy': 'always_use_exchange_max',
         'min_order_margin_usdt': 0.1,
-        'fixed_order_notional_usdt': FIXED_ORDER_NOTIONAL_USDT,
+        'fixed_order_notional_usdt': fixed_order_notional_usdt,
         'trade_style': 'short_term_intraday',
         'max_open_positions': MAX_OPEN_POSITIONS,
         'max_same_direction': MAX_SAME_DIRECTION,
@@ -7036,7 +7089,8 @@ def scan_thread():
                 time.sleep(10)
                 continue
 
-            ranked=sorted(tickers.items(),key=lambda x:x[1].get('quoteVolume',0),reverse=True)
+            scan_limit = max(20, int(COIN_SELECTOR_SCAN_LIMIT or 100))
+            ranked = rank_tradable_markets(tickers, limit=COIN_SELECTOR_PREFILTER_LIMIT)
 
             # 排除股票代幣（只保留加密貨幣）
             STOCK_TOKENS = {
@@ -7052,8 +7106,15 @@ def scan_thread():
                 # 排除含小數點或看起來像股票的（如 1000BONK 是幣）
                 return True
 
-            symbols=[s[0] for s in ranked
-                     if s[0].endswith(':USDT') and is_crypto(s[0])][:70]
+            marketability_by_symbol = {}
+            symbols = []
+            for sym, _, marketability in ranked:
+                if not is_crypto(sym):
+                    continue
+                symbols.append(sym)
+                marketability_by_symbol[sym] = marketability
+                if len(symbols) >= scan_limit:
+                    break
             print("本輪掃描 {} 個幣".format(len(symbols)))
 
             sigs=[]
@@ -7063,7 +7124,7 @@ def scan_thread():
                           if v.get("count",0)>=7 and v.get("win",0)/v["count"]<0.4}
 
             for i,sym in enumerate(symbols):
-                update_state(scan_progress="掃描 {}/70：{}".format(i+1,sym))
+                update_state(scan_progress="掃描 {}/{}：{}".format(i+1, len(symbols), sym))
                 try:
                     time.sleep(0.5)  # 幣與幣之間間隔0.5秒，避免rate limit
                     sc,desc,pr,sl,tp,ep,bd,atr,atr15,atr4h,sl_m,tp_m = analyze(sym)
@@ -7073,6 +7134,7 @@ def scan_thread():
                         stable_score = smooth_signal_score(sym, sc)
                         SIGNAL_META_CACHE[sym] = {
                             "atr": atr, "atr15": atr15, "atr4h": atr4h, "price": pr,
+                            "marketability": marketability_by_symbol.get(sym, {}),
                             "raw_score": sc, "stable_score": stable_score, "updated_at": tw_now_str(), "ts": time.time(),
                             "setup_label": bd.get("Setup", ""),
                             "signal_grade": bd.get("等級", ""),
@@ -7105,6 +7167,8 @@ def scan_thread():
                             "regime_confidence": bd.get("RegimeConfidence", bd.get("TrendConfidence", bd.get("方向信心", 0))),
                             "trend_confidence": bd.get("TrendConfidence", bd.get("方向信心", 0)),
                             "score_jump": score_jump_alert(sym, sc, stable_score),
+                            "marketability": marketability_by_symbol.get(sym, {}),
+                            "marketability_score": (marketability_by_symbol.get(sym, {}) or {}).get("score", 0.0),
                         })
                 except Exception as sym_e:
                     print("分析 {} 失敗跳過: {}".format(sym, sym_e))
@@ -7123,7 +7187,10 @@ def scan_thread():
                     rot_adj, rot_notes = 0.0, []
                 s['rotation_adj'] = rot_adj
                 s['rotation_notes'] = rot_notes
-                s['priority_score'] = round(abs(float(s.get('score', 0) or 0)) + rot_adj + float(s.get('entry_quality', 0) or 0) * 0.15 + min(float(s.get('rr_ratio', 0) or 0), 3.0) * 0.12, 2)
+                selection_edge, selection_notes = coin_selection_edge(s)
+                s['selection_edge'] = selection_edge
+                s['selection_notes'] = selection_notes
+                s['priority_score'] = round(abs(float(s.get('score', 0) or 0)) + rot_adj + selection_edge + float(s.get('entry_quality', 0) or 0) * 0.15 + min(float(s.get('rr_ratio', 0) or 0), 3.0) * 0.12, 2)
 
             # 分開排序：多頭取前6，空頭取前4，排行榜顯示10個
             long_sigs  = sorted([s for s in sigs if s['score']>0], key=lambda x:(x.get('priority_score', abs(x['score'])), x['score']), reverse=True)[:6]
@@ -7240,7 +7307,7 @@ def scan_thread():
                     openai_mode_active = bool(OPENAI_TRADE_CONFIG.get('enabled', True) and OPENAI_API_KEY)
                     if openai_mode_active:
                         allow_now = False
-                        if rank_index < int(OPENAI_TRADE_CONFIG.get('top_k_per_scan', 3) or 3) and not hard_gate_reasons:
+                        if rank_index < int(OPENAI_TRADE_CONFIG.get('top_k_per_scan', 5) or 5) and not hard_gate_reasons:
                             risk_snapshot = get_risk_status()
                             portfolio = {
                                 'equity': STATE.get('equity', 0),
@@ -7265,7 +7332,7 @@ def scan_thread():
                                 if allow_now:
                                     _apply_openai_trade_plan_to_signal(best, openai_decision, openai_result)
                         else:
-                            openai_status = 'not_ranked' if rank_index >= int(OPENAI_TRADE_CONFIG.get('top_k_per_scan', 3) or 3) else 'local_gate_block'
+                            openai_status = 'not_ranked' if rank_index >= int(OPENAI_TRADE_CONFIG.get('top_k_per_scan', 5) or 5) else 'local_gate_block'
                     elif OPENAI_TRADE_CONFIG.get('enabled', True):
                         openai_status = 'missing_api_key'
 
@@ -7274,7 +7341,7 @@ def scan_thread():
                     if hard_gate_reasons:
                         reasons.extend(hard_gate_reasons)
                     if openai_mode_active:
-                        reasons.append('OpenAI候選篩選前{}名'.format(int(OPENAI_TRADE_CONFIG.get('top_k_per_scan', 3) or 3)))
+                        reasons.append('OpenAI候選篩選前{}名'.format(int(OPENAI_TRADE_CONFIG.get('top_k_per_scan', 5) or 5)))
                         if openai_status == 'not_ranked':
                             reasons.append('未進入OpenAI決策名單')
                         elif openai_status == 'local_gate_block':
@@ -7308,6 +7375,9 @@ def scan_thread():
                         'threshold': round(ai_decision.get('effective_threshold', eff_threshold), 2),
                         'effective_score': round(float(ai_decision.get('effective_score', abs(best.get('score', 0))) or 0), 2),
                         'rotation_adj': round(float(ai_decision.get('rotation_adj', best.get('rotation_adj', 0)) or 0), 2),
+                        'selection_edge': round(float(best.get('selection_edge', 0) or 0), 2),
+                        'selection_notes': list(best.get('selection_notes') or [])[:8],
+                        'marketability': dict(best.get('marketability') or {}),
                         'entry_quality': round(entry_quality, 2),
                         'rr_ratio': round(rr_ratio, 2),
                         'mkt_dir': mkt_dir,
@@ -7353,6 +7423,18 @@ def scan_thread():
                         'openai_margin_pct': round(float(openai_decision.get('margin_pct', 0) or 0), 4) if openai_decision else 0.0,
                         'openai_confidence': round(float(openai_decision.get('confidence', 0) or 0), 2) if openai_decision else 0.0,
                         'openai_thesis': str(openai_decision.get('thesis') or '')[:260] if openai_decision else '',
+                        'openai_market_read': str(openai_decision.get('market_read') or '')[:260] if openai_decision else '',
+                        'openai_entry_plan': str(openai_decision.get('entry_plan') or '')[:260] if openai_decision else '',
+                        'openai_entry_reason': str(openai_decision.get('entry_reason') or '')[:220] if openai_decision else '',
+                        'openai_stop_loss_reason': str(openai_decision.get('stop_loss_reason') or '')[:220] if openai_decision else '',
+                        'openai_take_profit_plan': str(openai_decision.get('take_profit_plan') or '')[:260] if openai_decision else '',
+                        'openai_if_missed_plan': str(openai_decision.get('if_missed_plan') or '')[:220] if openai_decision else '',
+                        'openai_reference_summary': str(openai_decision.get('reference_summary') or '')[:220] if openai_decision else '',
+                        'openai_chase_if_triggered': bool(openai_decision.get('chase_if_triggered', False)) if openai_decision else False,
+                        'openai_chase_trigger_price': round(float(openai_decision.get('chase_trigger_price', 0) or 0), 8) if openai_decision else 0.0,
+                        'openai_chase_limit_price': round(float(openai_decision.get('chase_limit_price', 0) or 0), 8) if openai_decision else 0.0,
+                        'openai_risk_notes': list(openai_decision.get('risk_notes') or [])[:4] if openai_decision else [],
+                        'openai_aggressive_note': str(openai_decision.get('aggressive_note') or '')[:220] if openai_decision else '',
                         'openai_reason_to_skip': str(openai_decision.get('reason_to_skip') or '')[:220] if openai_decision else '',
                         'openai_cached': bool(openai_status == 'cached_reuse'),
                         'openai_budget_spent_twd': round(float(openai_panel.get('spent_estimated_twd', 0) or 0), 4),
@@ -7703,16 +7785,7 @@ def api_state_legacy_shadow_1():
         except:
             pass
 
-        # 補上時段資訊（歐美盤橘色條）
-        with SESSION_LOCK:
-            s['session_info'] = {
-                "phase":    SESSION_STATE.get("session_phase", "normal"),
-                "note":     SESSION_STATE.get("session_note", ""),
-                "eu_score": SESSION_STATE.get("eu_score", 0),
-                "us_score": SESSION_STATE.get("us_score", 0),
-                "eu_time":  SESSION_STATE.get("eu_score_time", ""),
-                "us_time":  SESSION_STATE.get("us_score_time", ""),
-            }
+        s['session_info'] = {}
 
         # 補上動態門檻資訊
         with _DT_LOCK:
@@ -7824,8 +7897,7 @@ def start_all_threads_legacy_shadow_1():
         (news_thread,            "news"),
         (position_thread,        "position"),
         (scan_thread,            "scan"),
-        (trailing_stop_thread,   "trailing"),
-        (session_monitor_thread, "session"),
+        (trailing_stop_thread,    "trailing"),
         (market_analysis_thread,  "market"),
         (fvg_order_monitor_thread,"fvg_monitor"),
     ]
@@ -8382,11 +8454,11 @@ def _grade_signal_v6(direction_conf, setup_q, rr, anti_chase_penalty, htf_penalt
 def analyze_legacy_shadow_2(symbol):
     is_major = symbol in MAJOR_COINS
     try:
-        d15 = pd.DataFrame(exchange.fetch_ohlcv(symbol, '15m', limit=120), columns=['t','o','h','l','c','v'])
+        d15 = pd.DataFrame(exchange.fetch_ohlcv(symbol, '15m', limit=ANALYZE_15M_LIMIT), columns=['t','o','h','l','c','v'])
         time.sleep(0.18)
-        d4h = pd.DataFrame(exchange.fetch_ohlcv(symbol, '4h', limit=80), columns=['t','o','h','l','c','v'])
+        d4h = pd.DataFrame(exchange.fetch_ohlcv(symbol, '4h', limit=ANALYZE_4H_LIMIT), columns=['t','o','h','l','c','v'])
         time.sleep(0.18)
-        d1d = pd.DataFrame(exchange.fetch_ohlcv(symbol, '1d', limit=60), columns=['t','o','h','l','c','v'])
+        d1d = pd.DataFrame(exchange.fetch_ohlcv(symbol, '1d', limit=ANALYZE_1D_LIMIT), columns=['t','o','h','l','c','v'])
         time.sleep(0.08)
         if len(d15) < 80 or len(d4h) < 40 or len(d1d) < 40:
             return 0, '資料不足', 0, 0, 0, 0, {}, 0, 0, 0, 2.0, 3.0
@@ -8644,16 +8716,25 @@ AI_LOCK = threading.Lock()
 PENDING_LIMIT_META = {}
 PENDING_LIMIT_LOCK = threading.RLock()
 AI_MARKET_TIMEFRAMES = ['5m', '15m', '1h', '4h', '1d']
-AI_MARKET_LIMIT = int(os.getenv('AI_MARKET_LIMIT', '70'))
+AI_MARKET_LIMIT = int(os.getenv('AI_MARKET_LIMIT', '120'))
+COIN_SELECTOR_SCAN_LIMIT = int(os.getenv('COIN_SELECTOR_SCAN_LIMIT', '100'))
+COIN_SELECTOR_PREFILTER_LIMIT = int(os.getenv('COIN_SELECTOR_PREFILTER_LIMIT', '220'))
+COIN_SELECTOR_MIN_QUOTE_VOLUME = float(os.getenv('COIN_SELECTOR_MIN_QUOTE_VOLUME', '250000'))
+COIN_SELECTOR_MIN_DAILY_MOVE_PCT = float(os.getenv('COIN_SELECTOR_MIN_DAILY_MOVE_PCT', '0.25'))
+COIN_SELECTOR_MAX_DAILY_MOVE_PCT = float(os.getenv('COIN_SELECTOR_MAX_DAILY_MOVE_PCT', '14.0'))
+COIN_SELECTOR_MAX_SPREAD_PCT = float(os.getenv('COIN_SELECTOR_MAX_SPREAD_PCT', '0.16'))
 SYMBOL_COOLDOWN_MINUTES = int(os.getenv('SYMBOL_COOLDOWN_MINUTES', '90'))
 SYMBOL_REPEAT_LOOKBACK = int(os.getenv('SYMBOL_REPEAT_LOOKBACK', '18'))
 SYMBOL_REPEAT_PENALTY = float(os.getenv('SYMBOL_REPEAT_PENALTY', '4.0'))
 SYMBOL_EXPLORATION_BONUS = float(os.getenv('SYMBOL_EXPLORATION_BONUS', '2.0'))
 SYMBOL_BALANCE_TARGET_SHARE = float(os.getenv('SYMBOL_BALANCE_TARGET_SHARE', '0.18'))
 SYMBOL_BALANCE_SOFT_CAP = float(os.getenv('SYMBOL_BALANCE_SOFT_CAP', '0.30'))
-AI_BACKTEST_LIMIT = int(os.getenv('AI_BACKTEST_KLINE_LIMIT', '320'))
-AI_SNAPSHOT_LIMIT = int(os.getenv('AI_SNAPSHOT_KLINE_LIMIT', '240'))
+AI_BACKTEST_LIMIT = int(os.getenv('AI_BACKTEST_KLINE_LIMIT', '700'))
+AI_SNAPSHOT_LIMIT = int(os.getenv('AI_SNAPSHOT_KLINE_LIMIT', '360'))
 AI_BACKTEST_SLEEP_SEC = int(os.getenv('AI_BACKTEST_SLEEP_SEC', '7200'))
+ANALYZE_15M_LIMIT = int(os.getenv('ANALYZE_15M_KLINE_LIMIT', '180'))
+ANALYZE_4H_LIMIT = int(os.getenv('ANALYZE_4H_KLINE_LIMIT', '120'))
+ANALYZE_1D_LIMIT = int(os.getenv('ANALYZE_1D_KLINE_LIMIT', '90'))
 
 def _default_ai_db():
     return {
@@ -8720,15 +8801,101 @@ def _is_crypto_usdt_swap_symbol(symbol):
         return False
 
 
+def _ticker_num(data, *keys, default=0.0):
+    data = dict(data or {})
+    for key in keys:
+        try:
+            value = data.get(key)
+            if value is None and isinstance(data.get('info'), dict):
+                value = data['info'].get(key)
+            if value in (None, ''):
+                continue
+            value = float(value)
+            if math.isnan(value) or math.isinf(value):
+                continue
+            return value
+        except Exception:
+            continue
+    return float(default)
+
+
+def marketability_from_ticker(symbol, ticker):
+    ticker = dict(ticker or {})
+    quote_vol = _ticker_num(ticker, 'quoteVolume', 'quoteVolume24h', 'usdtVolume', default=0.0)
+    base_vol = _ticker_num(ticker, 'baseVolume', default=0.0)
+    last = _ticker_num(ticker, 'last', 'close', default=0.0)
+    bid = _ticker_num(ticker, 'bid', default=0.0)
+    ask = _ticker_num(ticker, 'ask', default=0.0)
+    pct = abs(_ticker_num(ticker, 'percentage', 'changePercentage', default=0.0))
+    if quote_vol <= 0 and base_vol > 0 and last > 0:
+        quote_vol = base_vol * last
+
+    if bid > 0 and ask > 0:
+        spread_pct = (ask - bid) / max((ask + bid) / 2.0, 1e-9) * 100.0
+    else:
+        spread_pct = 0.0
+
+    reasons = []
+    score = 0.0
+    score += min(max(math.log10(max(quote_vol, 1.0)) - 5.2, 0.0) / 2.6, 1.0) * 3.0
+    if pct >= COIN_SELECTOR_MIN_DAILY_MOVE_PCT:
+        score += min(pct / 4.5, 1.0) * 2.0
+    else:
+        score -= 1.2
+        reasons.append('quiet_market')
+    if COIN_SELECTOR_MIN_DAILY_MOVE_PCT <= pct <= COIN_SELECTOR_MAX_DAILY_MOVE_PCT:
+        score += 1.0
+    else:
+        score -= 1.6
+        reasons.append('daily_move_outlier')
+    if spread_pct > 0:
+        if spread_pct <= COIN_SELECTOR_MAX_SPREAD_PCT:
+            score += 1.2
+        else:
+            score -= min(2.0, (spread_pct - COIN_SELECTOR_MAX_SPREAD_PCT) * 8.0)
+            reasons.append('wide_spread')
+    if quote_vol < COIN_SELECTOR_MIN_QUOTE_VOLUME:
+        score -= 2.0
+        reasons.append('thin_volume')
+    if symbol in SHORT_TERM_EXCLUDED:
+        score -= 4.0
+        reasons.append('short_term_excluded')
+
+    score = round(max(0.0, min(score, 7.2)), 3)
+    return {
+        'score': score,
+        'quote_volume': round(quote_vol, 2),
+        'daily_move_pct': round(pct, 3),
+        'spread_pct': round(spread_pct, 4),
+        'tradable': bool(score >= 2.2 and quote_vol >= COIN_SELECTOR_MIN_QUOTE_VOLUME),
+        'reasons': reasons,
+    }
+
+
+def rank_tradable_markets(tickers, limit=140):
+    rows = []
+    for sym, data in (tickers or {}).items():
+        if not _is_crypto_usdt_swap_symbol(sym):
+            continue
+        marketability = marketability_from_ticker(sym, data)
+        if not marketability.get('tradable') and len(rows) >= max(20, int(limit or 140)):
+            continue
+        rows.append((sym, data, marketability))
+    rows.sort(
+        key=lambda x: (
+            float((x[2] or {}).get('score', 0.0) or 0.0),
+            float((x[2] or {}).get('quote_volume', 0.0) or 0.0),
+        ),
+        reverse=True,
+    )
+    return rows[:max(1, int(limit or 140))]
+
+
 def fetch_top_volume_symbols(limit=70):
     try:
         tickers = exchange.fetch_tickers()
-        ranked = sorted(
-            [(sym, data) for sym, data in tickers.items() if _is_crypto_usdt_swap_symbol(sym)],
-            key=lambda x: float((x[1] or {}).get('quoteVolume', 0) or 0),
-            reverse=True,
-        )
-        symbols = [sym for sym, _ in ranked[:max(1, int(limit))]]
+        ranked = rank_tradable_markets(tickers, limit=max(int(limit) * 2, int(limit)))
+        symbols = [sym for sym, _, marketability in ranked if marketability.get('tradable', True)][:max(1, int(limit))]
         return symbols, len(ranked)
     except Exception as e:
         print('抓前{}成交量市場失敗: {}'.format(limit, e))
@@ -9017,8 +9184,8 @@ _BASE_API_STATE = api_state_legacy_shadow_1
 
 def _fetch_regime_for_symbol(symbol):
     try:
-        d15 = _safe_fetch_ohlcv_df(symbol, '15m', 120)
-        d1h = _safe_fetch_ohlcv_df(symbol, '1h', 120)
+        d15 = _safe_fetch_ohlcv_df(symbol, '15m', max(ANALYZE_15M_LIMIT, 180))
+        d1h = _safe_fetch_ohlcv_df(symbol, '1h', max(ANALYZE_4H_LIMIT, 180))
         info = classify_market_regime(d15, d1h)
         tempo = detect_market_tempo(d15)
         info.update(tempo)
@@ -10152,9 +10319,9 @@ def enhanced_position_thread():
                     mark = float(ticker.get('last', 0) or 0)
                     if mark <= 0: continue
                     params = get_regime_params((AI_PANEL.get('symbol_regimes', {}).get(sym) or {}).get('regime', 'neutral'))
-                    breakeven_atr = float(params.get('breakeven_atr', 0.9))
-                    trail_trigger_atr = float(params.get('trail_trigger_atr', 1.4))
-                    trail_pct = float(params.get('trail_pct', ts.get('trail_pct', 0.035)))
+                    breakeven_atr = float(ts.get('breakeven_atr_hint', 0) or params.get('breakeven_atr', 0.9))
+                    trail_trigger_atr = float(ts.get('trail_trigger_atr_hint', 0) or params.get('trail_trigger_atr', 1.4))
+                    trail_pct = float(ts.get('trail_pct', params.get('trail_pct', 0.035)) or params.get('trail_pct', 0.035))
                     if side in ('buy', 'long'):
                         profit_atr = (mark - entry) / max(atr, 1e-9)
                         if profit_atr >= breakeven_atr: ts['initial_sl'] = max(float(ts.get('initial_sl', 0) or 0), entry)
@@ -10585,14 +10752,14 @@ def api_ai_debug_last_decision():
             threshold_state=threshold_state,
             risk_status=get_risk_status(),
             market_state=MARKET_STATE,
-            session_state=SESSION_STATE,
+            session_state={},
             now_text=tw_now_str('%Y-%m-%d %H:%M:%S'),
         )
         RUNTIME_STATE.update(
             threshold=threshold_state,
             risk_status=get_risk_status(),
             market_state=dict(MARKET_STATE or {}),
-            session_state=dict(SESSION_STATE or {}),
+            session_state={},
             audit=payload.get('auto_order_audit', {}),
         )
         symbol = str(request.args.get('symbol') or '').strip()
@@ -10815,13 +10982,13 @@ def verify_protection_orders(symbol, side, sl_price, tp_price):
 def ensure_exchange_protection(sym, side, pos_side, qty, sl_price, tp_price, verify_wait_sec=1.0):
     global PROTECTION_FAIL_STREAK
     sl_ok, tp_ok = _original_ensure_exchange_protection(sym, side, pos_side, qty, sl_price, tp_price, verify_wait_sec=verify_wait_sec)
-    if not sl_ok:
+    if not (sl_ok and tp_ok):
         # 第二次補掛雙重確認
         time.sleep(1.0)
         sl_ok2, tp_ok2 = _original_ensure_exchange_protection(sym, side, pos_side, qty, sl_price, tp_price, verify_wait_sec=0.5)
         sl_ok = bool(sl_ok or sl_ok2)
         tp_ok = bool(tp_ok or tp_ok2)
-    if not sl_ok:
+    if not (sl_ok and tp_ok):
         PROTECTION_FAIL_STREAK += 1
         action = protection_failure_action(sym, {'sl_ok': sl_ok, 'tp_ok': tp_ok}, missing_seconds=3.5)
         append_risk_event('protection_missing_auto_action', action)
