@@ -37,15 +37,15 @@ def default_trade_config(env_getter: Callable[[str, str], str]) -> Dict[str, Any
     hard_ratio = min(max(_env_float(env_getter, 'OPENAI_TRADE_HARD_BUDGET_RATIO', 0.95), soft_ratio), 1.0)
     return {
         'enabled': _env_bool(env_getter, 'OPENAI_TRADE_ENABLE', True),
-        'model': str(env_getter('OPENAI_TRADE_MODEL', 'gpt-5-nano') or 'gpt-5-nano').strip(),
+        'model': str(env_getter('OPENAI_TRADE_MODEL', 'gpt-5.4-mini') or 'gpt-5.4-mini').strip(),
         'monthly_budget_twd': monthly_budget_twd,
         'soft_budget_twd': round(monthly_budget_twd * soft_ratio, 2),
         'hard_budget_twd': round(monthly_budget_twd * hard_ratio, 2),
         'usd_to_twd': max(_env_float(env_getter, 'OPENAI_TRADE_USD_TO_TWD', 32.0), 1.0),
-        'input_price_per_1m_usd': max(_env_float(env_getter, 'OPENAI_TRADE_PRICE_INPUT_PER_1M_USD', 0.20), 0.0),
-        'output_price_per_1m_usd': max(_env_float(env_getter, 'OPENAI_TRADE_PRICE_OUTPUT_PER_1M_USD', 1.25), 0.0),
-        'cached_input_price_per_1m_usd': max(_env_float(env_getter, 'OPENAI_TRADE_PRICE_CACHED_INPUT_PER_1M_USD', 0.02), 0.0),
-        'top_k_per_scan': max(_env_int(env_getter, 'OPENAI_TRADE_TOP_K', 3), 1),
+        'input_price_per_1m_usd': max(_env_float(env_getter, 'OPENAI_TRADE_PRICE_INPUT_PER_1M_USD', 0.75), 0.0),
+        'output_price_per_1m_usd': max(_env_float(env_getter, 'OPENAI_TRADE_PRICE_OUTPUT_PER_1M_USD', 4.50), 0.0),
+        'cached_input_price_per_1m_usd': max(_env_float(env_getter, 'OPENAI_TRADE_PRICE_CACHED_INPUT_PER_1M_USD', 0.075), 0.0),
+        'top_k_per_scan': max(_env_int(env_getter, 'OPENAI_TRADE_TOP_K', 5), 1),
         'cooldown_minutes': max(_env_int(env_getter, 'OPENAI_TRADE_SYMBOL_COOLDOWN_MINUTES', 180), 1),
         'global_min_interval_minutes': max(_env_int(env_getter, 'OPENAI_TRADE_GLOBAL_MIN_INTERVAL_MINUTES', 15), 0),
         'min_score_abs': max(_env_float(env_getter, 'OPENAI_TRADE_MIN_SCORE', 38.0), 0.0),
@@ -53,11 +53,11 @@ def default_trade_config(env_getter: Callable[[str, str], str]) -> Dict[str, Any
         'max_margin_pct': min(max(_env_float(env_getter, 'OPENAI_TRADE_MAX_MARGIN_PCT', 0.08), 0.01), 0.8),
         'min_leverage': max(_env_int(env_getter, 'OPENAI_TRADE_MIN_LEVERAGE', 4), 1),
         'max_leverage': max(_env_int(env_getter, 'OPENAI_TRADE_MAX_LEVERAGE', 25), 1),
-        'max_output_tokens': max(_env_int(env_getter, 'OPENAI_TRADE_MAX_OUTPUT_TOKENS', 900), 200),
+        'max_output_tokens': max(_env_int(env_getter, 'OPENAI_TRADE_MAX_OUTPUT_TOKENS', 1400), 200),
         'request_timeout_sec': max(_env_float(env_getter, 'OPENAI_TRADE_TIMEOUT_SEC', 35.0), 5.0),
         'temperature': 0.2,
         'base_url': str(env_getter('OPENAI_RESPONSES_URL', 'https://api.openai.com/v1/responses') or 'https://api.openai.com/v1/responses').strip(),
-        'reasoning_effort': str(env_getter('OPENAI_TRADE_REASONING_EFFORT', 'low') or 'low').strip(),
+        'reasoning_effort': str(env_getter('OPENAI_TRADE_REASONING_EFFORT', 'high') or 'high').strip(),
     }
 
 
@@ -180,6 +180,7 @@ def build_candidate_payload(
         'symbol': str(signal.get('symbol') or ''),
         'side': 'long' if float(signal.get('score', 0) or 0) >= 0 else 'short',
         'trade_style': str(constraints.get('trade_style') or style.get('holding_period') or 'short_term_intraday'),
+        'signal_desc': str(signal.get('desc') or '')[:420],
         'rank': int(rank_index) + 1,
         'score': _round(signal.get('score'), 4),
         'raw_score': _round(signal.get('raw_score', signal.get('score')), 4),
@@ -218,6 +219,7 @@ def build_candidate_payload(
             'open_symbols': list(portfolio.get('open_symbols') or [])[:8],
         },
         'execution_policy': execution_policy,
+        'reference_context': dict(signal.get('external_reference') or signal.get('reference_context') or signal.get('scanner_reference') or {}),
         'top_candidates': list(top_candidates or [])[:5],
         'constraints': dict(constraints or {}),
     }
@@ -252,7 +254,7 @@ def _append_recent(state: Dict[str, Any], item: Dict[str, Any], limit: int = 14)
 
 def _top_candidates_signature(candidate: Dict[str, Any]) -> str:
     items = []
-    for row in list(candidate.get('top_candidates') or [])[:3]:
+    for row in list(candidate.get('top_candidates') or [])[:5]:
         sym = str((row or {}).get('symbol') or '').strip()
         if sym:
             items.append(sym)
@@ -278,6 +280,19 @@ def _build_recent_item(candidate: Dict[str, Any], *, status: str, action: str = 
         'margin_pct': _round(decision.get('margin_pct'), 4),
         'confidence': _round(decision.get('confidence'), 2),
         'thesis': str(decision.get('thesis') or '')[:280],
+        'market_read': str(decision.get('market_read') or '')[:280],
+        'entry_plan': str(decision.get('entry_plan') or '')[:280],
+        'entry_reason': str(decision.get('entry_reason') or '')[:220],
+        'stop_loss_reason': str(decision.get('stop_loss_reason') or '')[:220],
+        'take_profit_plan': str(decision.get('take_profit_plan') or '')[:280],
+        'if_missed_plan': str(decision.get('if_missed_plan') or '')[:220],
+        'reference_summary': str(decision.get('reference_summary') or '')[:220],
+        'chase_if_triggered': bool(decision.get('chase_if_triggered', False)),
+        'chase_trigger_price': _round(decision.get('chase_trigger_price'), 8),
+        'chase_limit_price': _round(decision.get('chase_limit_price'), 8),
+        'risk_notes': [str(x).strip()[:140] for x in list(decision.get('risk_notes') or []) if str(x).strip()][:4],
+        'aggressive_note': str(decision.get('aggressive_note') or '')[:220],
+        'reason_to_skip': str(decision.get('reason_to_skip') or '')[:220],
     }
 
 
@@ -331,6 +346,20 @@ def _json_schema() -> Dict[str, Any]:
             'entry_price': {'type': 'number'},
             'stop_loss': {'type': 'number'},
             'take_profit': {'type': 'number'},
+            'market_read': {'type': 'string'},
+            'entry_plan': {'type': 'string'},
+            'entry_reason': {'type': 'string'},
+            'stop_loss_reason': {'type': 'string'},
+            'take_profit_plan': {'type': 'string'},
+            'if_missed_plan': {'type': 'string'},
+            'reference_summary': {'type': 'string'},
+            'chase_if_triggered': {'type': 'boolean'},
+            'chase_trigger_price': {'type': 'number'},
+            'chase_limit_price': {'type': 'number'},
+            'trail_trigger_atr_hint': {'type': 'number'},
+            'trail_pct_hint': {'type': 'number'},
+            'breakeven_atr_hint': {'type': 'number'},
+            'dynamic_take_profit_hint': {'type': 'number'},
             'leverage': {'type': 'integer'},
             'margin_pct': {'type': 'number'},
             'confidence': {'type': 'number'},
@@ -345,6 +374,16 @@ def _json_schema() -> Dict[str, Any]:
             'entry_price',
             'stop_loss',
             'take_profit',
+            'market_read',
+            'entry_plan',
+            'entry_reason',
+            'stop_loss_reason',
+            'take_profit_plan',
+            'if_missed_plan',
+            'reference_summary',
+            'chase_if_triggered',
+            'chase_trigger_price',
+            'chase_limit_price',
             'leverage',
             'margin_pct',
             'confidence',
@@ -369,13 +408,15 @@ def _build_messages(candidate: Dict[str, Any]) -> list[Dict[str, Any]]:
     system_text = (
         'You are a crypto perpetual futures execution planner for short-term trading. '
         'Use every field in the candidate payload, especially the multi-timeframe market context, '
-        'the latest closed candle shape, momentum, volatility, volume expansion, execution context, and risk state. '
-        'Make the final trading plan, not a generic analysis. '
-        'Be decisive rather than overly conservative. '
-        'If the setup is tradable, do not default to tiny size or timid positioning. '
+        'the latest closed candle shape, momentum, volatility, volume expansion, execution context, risk state, '
+        'and any external/reference analysis attached in the payload. '
+        'Produce a tactical execution plan, not a generic summary. '
+        'Think deeply about structure, trigger quality, liquidity, stop placement, and whether the move is better handled as a pullback limit order or an aggressive market chase. '
+        'Be aggressive but not reckless: when the setup is genuinely strong, do not become timid; when the setup is messy, explicitly stand down. '
         'Assume the bot will execute with the exchange maximum leverage for this symbol. '
         'Your job is to decide whether the setup is worth trading now, whether entry should be market or limit, '
-        'and what stop loss / take profit / thesis best fit a short-term trade. '
+        'where the entry should be placed, whether a missed entry can still be chased, and what stop loss / take profit best fit a short-term trade. '
+        'Stop loss and take profit must be practical and tightly linked to market structure, liquidity, or volatility. '
         'Only reject the trade when the setup is clearly weak, conflicting, or poorly priced. '
         'Return valid JSON only.'
     )
@@ -387,9 +428,16 @@ def _build_messages(candidate: Dict[str, Any]) -> list[Dict[str, Any]]:
         f'- actual execution notional is fixed to {fixed_order_notional_usdt:.4f} USDT per order\n'
         f'- the bot can go as low as {min_order_margin_usdt:.4f} USDT minimum margin floor, but do not choose timid sizing when the setup is strong\n'
         '- order_type must be market or limit\n'
-        '- stop_loss and take_profit must be valid for the side\n'
+        '- stop_loss and take_profit must be valid for the side and are mandatory exchange protection orders\n'
+        '- you may optionally suggest trailing hints via trail_trigger_atr_hint / trail_pct_hint / breakeven_atr_hint / dynamic_take_profit_hint; these are advisory only\n'
+        '- market_read should summarize what the market is doing right now in a tactical short-term way\n'
+        '- entry_plan should say exactly why entry is market/limit and what price behavior you want\n'
+        '- entry_reason / stop_loss_reason / take_profit_plan / if_missed_plan / reference_summary must be concise but specific\n'
+        '- if chase_if_triggered is false, set chase_trigger_price and chase_limit_price to 0\n'
+        '- if chase_if_triggered is true, chase_trigger_price should be the price that confirms continuation and chase_limit_price should be the highest acceptable price for long, or lowest acceptable price for short\n'
         '- confidence should be 0-100\n'
         'If you choose limit order, entry_price is the limit price.\n'
+        'If you choose market order, entry_price is the intended market execution anchor around current price.\n'
         'If you choose not to trade, still return a complete object and explain why.\n'
         'Candidate payload JSON:\n'
         + json.dumps(candidate, ensure_ascii=False, separators=(',', ':'))
@@ -402,9 +450,9 @@ def _build_messages(candidate: Dict[str, Any]) -> list[Dict[str, Any]]:
 
 def _build_request_body(candidate: Dict[str, Any], config: Dict[str, Any], *, structured: bool = True) -> Dict[str, Any]:
     body = {
-        'model': str(config.get('model') or 'gpt-5-nano'),
+        'model': str(config.get('model') or 'gpt-5.4-mini'),
         'input': _build_messages(candidate),
-        'max_output_tokens': int(config.get('max_output_tokens', 900) or 900),
+        'max_output_tokens': int(config.get('max_output_tokens', 1400) or 1400),
     }
     effort = str(config.get('reasoning_effort') or '').strip()
     if effort:
@@ -440,6 +488,20 @@ def _normalize_decision(raw: Dict[str, Any], candidate: Dict[str, Any]) -> Dict[
         'entry_price': float(raw.get('entry_price', entry_default) or entry_default),
         'stop_loss': float(raw.get('stop_loss', stop_default) or stop_default),
         'take_profit': float(raw.get('take_profit', tp_default) or tp_default),
+        'market_read': str(raw.get('market_read') or '').strip(),
+        'entry_plan': str(raw.get('entry_plan') or '').strip(),
+        'entry_reason': str(raw.get('entry_reason') or '').strip(),
+        'stop_loss_reason': str(raw.get('stop_loss_reason') or '').strip(),
+        'take_profit_plan': str(raw.get('take_profit_plan') or '').strip(),
+        'if_missed_plan': str(raw.get('if_missed_plan') or '').strip(),
+        'reference_summary': str(raw.get('reference_summary') or '').strip(),
+        'chase_if_triggered': bool(raw.get('chase_if_triggered', False)),
+        'chase_trigger_price': float(raw.get('chase_trigger_price', 0) or 0),
+        'chase_limit_price': float(raw.get('chase_limit_price', 0) or 0),
+        'trail_trigger_atr_hint': float(raw.get('trail_trigger_atr_hint', 0) or 0),
+        'trail_pct_hint': float(raw.get('trail_pct_hint', 0) or 0),
+        'breakeven_atr_hint': float(raw.get('breakeven_atr_hint', 0) or 0),
+        'dynamic_take_profit_hint': float(raw.get('dynamic_take_profit_hint', 0) or 0),
         'leverage': int(_clamp(raw.get('leverage', constraints.get('fixed_leverage', constraints.get('min_leverage', 4))), constraints.get('min_leverage', 4), constraints.get('max_leverage', 25))),
         'margin_pct': _clamp(raw.get('margin_pct', constraints.get('min_margin_pct', 0.03)), constraints.get('min_margin_pct', 0.03), constraints.get('max_margin_pct', 0.08)),
         'confidence': _clamp(raw.get('confidence', 0), 0, 100),
@@ -450,6 +512,22 @@ def _normalize_decision(raw: Dict[str, Any], candidate: Dict[str, Any]) -> Dict[
     }
     if constraints.get('fixed_leverage'):
         decision['leverage'] = int(constraints.get('fixed_leverage') or decision['leverage'])
+    decision['market_read'] = decision['market_read'][:280]
+    decision['entry_plan'] = decision['entry_plan'][:280]
+    decision['entry_reason'] = decision['entry_reason'][:220]
+    decision['stop_loss_reason'] = decision['stop_loss_reason'][:220]
+    decision['take_profit_plan'] = decision['take_profit_plan'][:280]
+    decision['if_missed_plan'] = decision['if_missed_plan'][:220]
+    decision['reference_summary'] = decision['reference_summary'][:220]
+    decision['chase_trigger_price'] = max(float(decision.get('chase_trigger_price', 0) or 0), 0.0)
+    decision['chase_limit_price'] = max(float(decision.get('chase_limit_price', 0) or 0), 0.0)
+    if not bool(decision.get('chase_if_triggered')):
+        decision['chase_trigger_price'] = 0.0
+        decision['chase_limit_price'] = 0.0
+    decision['trail_trigger_atr_hint'] = _clamp(decision.get('trail_trigger_atr_hint', 0), 0, 6)
+    decision['trail_pct_hint'] = _clamp(decision.get('trail_pct_hint', 0), 0, 0.3)
+    decision['breakeven_atr_hint'] = _clamp(decision.get('breakeven_atr_hint', 0), 0, 4)
+    decision['dynamic_take_profit_hint'] = max(float(decision.get('dynamic_take_profit_hint', 0) or 0), 0.0)
     if not math.isfinite(decision['entry_price']) or decision['entry_price'] <= 0:
         decision['entry_price'] = entry_default
     if not math.isfinite(decision['stop_loss']) or decision['stop_loss'] <= 0:
@@ -510,7 +588,7 @@ def consult_trade_decision(
         result = {'status': 'below_min_score', 'decision': None, 'payload_hash': payload_hash, 'symbol_state': symbol_state}
         return state, result
 
-    if rank > int(config.get('top_k_per_scan', 3) or 3):
+    if rank > int(config.get('top_k_per_scan', 5) or 5):
         result = {'status': 'not_ranked', 'decision': None, 'payload_hash': payload_hash, 'symbol_state': symbol_state}
         return state, result
 
@@ -608,7 +686,7 @@ def consult_trade_decision(
         symbol_state.update({
             'last_payload_hash': payload_hash,
             'last_sent_ts': now_ts,
-            'last_model': str(config.get('model') or 'gpt-5-nano'),
+            'last_model': str(config.get('model') or 'gpt-5.4-mini'),
             'last_decision': dict(decision or {}),
             'last_status': 'consulted',
             'last_response_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -723,7 +801,7 @@ def build_dashboard_payload(state: Dict[str, Any], config: Dict[str, Any], *, ap
         'input_tokens': int(state.get('input_tokens', 0) or 0),
         'output_tokens': int(state.get('output_tokens', 0) or 0),
         'cached_input_tokens': int(state.get('cached_input_tokens', 0) or 0),
-        'top_k_per_scan': int(config.get('top_k_per_scan', 3) or 3),
+        'top_k_per_scan': int(config.get('top_k_per_scan', 5) or 5),
         'cooldown_minutes': int(config.get('cooldown_minutes', 180) or 180),
         'global_min_interval_minutes': int(config.get('global_min_interval_minutes', 15) or 15),
         'min_score_abs': float(config.get('min_score_abs', 38.0) or 38.0),
