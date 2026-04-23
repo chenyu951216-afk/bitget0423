@@ -82,6 +82,7 @@ MAX_MARGIN_PCT        = RISK_POLICY['max_margin_pct']      # 動態保證金上�
 MAX_OPEN_POSITIONS    = RISK_POLICY['max_open_positions']         # 短線總持倉上限
 MAX_SAME_DIRECTION    = RISK_POLICY['max_same_direction']         # 同方向最多 5 筆
 TIME_STOP_BARS_15M    = RISK_POLICY['time_stop_bars_15m']        # 15 根 15m K 仍不走就時間止損
+FIXED_ORDER_NOTIONAL_USDT = 20.0  # 每單固定名目倉位 20U
 NEWS_CACHE_TTL_SEC    = EXECUTION_POLICY['news_cache_ttl_sec']       # 新聞快取 5 分鐘
 ANTI_CHASE_ATR      = max(float(EXECUTION_POLICY.get('anti_chase_atr', 1.25) or 1.25), 1.8)      # AI主控版：追價保護改偏扣分，不硬擋
 BREAKOUT_LOOKBACK   = EXECUTION_POLICY['breakout_lookback']        # 預判暴拉/暴跌的區間觀察根數
@@ -6251,8 +6252,8 @@ def plan_scale_in_orders(sig, total_qty, entry_price, atr):
 
 def compute_order_size(sym, entry_price, stop_price, equity, lev, margin_pct=None):
     """
-    倉位大小 = min(名目資金上限, 停損風險上限)，但實際保證金至少保留極小下單底線。
-    槓桿放大多少不影響這個底線：先保證最低投入保證金，再用槓桿換算口數。
+    固定每單名目倉位 20U。
+    保證金 = 20U / 槓桿；口數 = 20U / 進場價。
     """
     try:
         entry_price = float(entry_price)
@@ -6263,18 +6264,8 @@ def compute_order_size(sym, entry_price, stop_price, equity, lev, margin_pct=Non
         if stop_dist <= 0:
             stop_dist = entry_price * 0.01
 
-        selected_margin_pct = float(margin_pct if margin_pct is not None else RISK_PCT)
-        selected_margin_pct = clamp(selected_margin_pct, MIN_MARGIN_PCT, MAX_MARGIN_PCT)
-        min_margin_usdt = max(equity * MIN_MARGIN_PCT, 0.1)
-        target_margin_usdt = max(equity * selected_margin_pct, min_margin_usdt)
-
-        risk_budget = max(equity * ATR_RISK_PCT, 0.5)
-        qty_by_risk = risk_budget / stop_dist
-        qty_by_target_margin = target_margin_usdt * lev / entry_price
-        qty_by_floor_margin  = min_margin_usdt * lev / entry_price
-
-        raw_qty = min(qty_by_risk, qty_by_target_margin)
-        raw_qty = max(raw_qty, qty_by_floor_margin)
+        fixed_notional_usdt = max(float(FIXED_ORDER_NOTIONAL_USDT), 0.1)
+        raw_qty = fixed_notional_usdt / max(entry_price, 1e-9)
 
         try:
             mkt = exchange.market(sym)
@@ -6285,18 +6276,18 @@ def compute_order_size(sym, entry_price, stop_price, equity, lev, margin_pct=Non
             pass
 
         qty = float(exchange.amount_to_precision(sym, raw_qty))
-        used_margin_usdt = qty * entry_price / lev
-        used_margin_pct = used_margin_usdt / equity if equity > 0 else selected_margin_pct
-        used_margin_pct = clamp(used_margin_pct, MIN_MARGIN_PCT, MAX_MARGIN_PCT)
+        actual_notional_usdt = qty * entry_price
+        used_margin_usdt = actual_notional_usdt / lev
+        used_margin_pct = used_margin_usdt / equity if equity > 0 else 0.0
         est_risk_usdt = qty * stop_dist
         return qty, round(used_margin_usdt, 4), round(est_risk_usdt, 4), round(stop_dist, 6), round(float(used_margin_pct), 4)
     except Exception as e:
         print("倉位計算失敗 {}: {}".format(sym, e))
-        fallback_margin = clamp(float(margin_pct or RISK_PCT), MIN_MARGIN_PCT, MAX_MARGIN_PCT)
-        fallback_margin = max(fallback_margin, MIN_MARGIN_PCT)
-        fallback_notional = max(float(equity) * fallback_margin, 0.1)
-        qty = float(exchange.amount_to_precision(sym, fallback_notional * max(float(lev),1.0) / max(float(entry_price),1e-9)))
-        return qty, round(fallback_notional, 4), 0.0, abs(float(entry_price) - float(stop_price)), round(fallback_margin, 4)
+        fixed_notional_usdt = max(float(FIXED_ORDER_NOTIONAL_USDT), 0.1)
+        qty = float(exchange.amount_to_precision(sym, fixed_notional_usdt / max(float(entry_price),1e-9)))
+        used_margin_usdt = fixed_notional_usdt / max(float(lev), 1.0)
+        used_margin_pct = used_margin_usdt / max(float(equity), 1.0)
+        return qty, round(used_margin_usdt, 4), 0.0, abs(float(entry_price) - float(stop_price)), round(used_margin_pct, 4)
 
 def tighten_position_for_session(sym, contracts, side, entry_price, mark_price):
     try:
@@ -6747,7 +6738,7 @@ def _apply_openai_trade_plan_to_signal(sig, decision, result):
 
 
 def _get_symbol_max_leverage(symbol):
-    lev = max(1, int(OPENAI_TRADE_CONFIG.get('max_leverage', 25) or 25))
+    lev = 0
     try:
         mkt = exchange.market(symbol)
         info = mkt.get('info', {})
@@ -6761,12 +6752,13 @@ def _get_symbol_max_leverage(symbol):
                     break
             except Exception:
                 continue
-        if lev <= 20:
+        if lev <= 1:
             try:
-                lev = max(lev, int(mkt.get('limits', {}).get('leverage', {}).get('max', lev)))
+                limit_lev = int(float(mkt.get('limits', {}).get('leverage', {}).get('max', 0) or 0))
+                lev = max(lev, limit_lev)
             except Exception:
                 pass
-        if lev <= 20:
+        if lev <= 1:
             try:
                 tiers = exchange.fetch_leverage_tiers([symbol])
                 sym_tiers = tiers.get(symbol, [])
@@ -6776,12 +6768,40 @@ def _get_symbol_max_leverage(symbol):
                 pass
     except Exception:
         pass
+    if lev <= 1:
+        lev = max(1, int(OPENAI_TRADE_CONFIG.get('max_leverage', 25) or 25))
     return max(int(lev or 1), 1)
 
 
 def _force_set_symbol_max_leverage(symbol, side):
     pos_side = 'long' if str(side or '').lower() in ('buy', 'long') else 'short'
     lev = _get_symbol_max_leverage(symbol)
+    market = {}
+    info = {}
+    try:
+        market = exchange.market(symbol)
+        info = dict(market.get('info', {}) or {})
+    except Exception:
+        market = {}
+        info = {}
+    market_id = str(market.get('id') or info.get('symbol') or symbol).strip()
+    margin_coin = str(info.get('marginCoin') or market.get('settle') or market.get('quote') or 'USDT').strip()
+    product_type = str(info.get('productType') or '').strip()
+
+    margin_attempts = [
+        {},
+        {'tdMode': 'cross', 'holdSide': pos_side},
+        {'marginMode': 'cross', 'holdSide': pos_side},
+        {'tdMode': 'cross', 'posSide': pos_side},
+        {'marginMode': 'cross', 'posSide': pos_side},
+    ]
+    for params in margin_attempts:
+        try:
+            if hasattr(exchange, 'set_margin_mode'):
+                exchange.set_margin_mode('cross', symbol, params or None)
+        except Exception:
+            pass
+
     attempts = [
         {},
         {'tdMode': 'cross', 'holdSide': pos_side},
@@ -6800,6 +6820,31 @@ def _force_set_symbol_max_leverage(symbol, side):
         except Exception as e:
             errors.append(str(e))
             continue
+
+    implicit_payloads = [
+        {'symbol': market_id, 'marginCoin': margin_coin, 'leverage': str(lev), 'holdSide': pos_side},
+        {'symbol': market_id, 'marginCoin': margin_coin, 'longLeverage': str(lev), 'shortLeverage': str(lev)},
+        {'symbol': market_id, 'productType': product_type, 'marginCoin': margin_coin, 'leverage': str(lev), 'holdSide': pos_side},
+        {'symbol': market_id, 'productType': product_type, 'marginCoin': margin_coin, 'longLeverage': str(lev), 'shortLeverage': str(lev)},
+    ]
+    implicit_methods = [
+        'private_mix_post_v2_mix_account_set_leverage',
+        'private_mix_post_mix_v1_account_setleverage',
+        'privateMixPostV2MixAccountSetLeverage',
+        'privateMixPostMixV1AccountSetLeverage',
+    ]
+    for method_name in implicit_methods:
+        method = getattr(exchange, method_name, None)
+        if not callable(method):
+            continue
+        for payload in implicit_payloads:
+            try:
+                clean_payload = {k: v for k, v in payload.items() if str(v or '').strip()}
+                method(clean_payload)
+                return lev, {'implicit': method_name, **clean_payload}, '', True
+            except Exception as e:
+                errors.append('{}: {}'.format(method_name, e))
+                continue
     return lev, {}, ' | '.join(errors[:3]), False
 
 
@@ -6904,6 +6949,7 @@ def _build_openai_short_term_context(sig, market_info, constraints):
             'fixed_leverage': int(constraints.get('fixed_leverage', constraints.get('max_leverage', 1)) or 1),
             'leverage_mode': str(constraints.get('leverage_policy') or 'always_use_exchange_max'),
             'min_order_margin_usdt': _safe_round_metric(constraints.get('min_order_margin_usdt', 0.1), 4),
+            'fixed_order_notional_usdt': _safe_round_metric(FIXED_ORDER_NOTIONAL_USDT, 4),
             'margin_pct_range': [
                 _safe_round_metric(constraints.get('min_margin_pct', MIN_MARGIN_PCT), 4),
                 _safe_round_metric(constraints.get('max_margin_pct', MAX_MARGIN_PCT), 4),
@@ -6933,6 +6979,7 @@ def _consult_openai_trade_for_signal(sig, rank_index, top_rows, market_info, ris
         'fixed_leverage': fixed_leverage,
         'leverage_policy': 'always_use_exchange_max',
         'min_order_margin_usdt': 0.1,
+        'fixed_order_notional_usdt': FIXED_ORDER_NOTIONAL_USDT,
         'trade_style': 'short_term_intraday',
         'max_open_positions': MAX_OPEN_POSITIONS,
         'max_same_direction': MAX_SAME_DIRECTION,
