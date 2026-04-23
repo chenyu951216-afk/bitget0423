@@ -37,9 +37,10 @@ def default_trade_config(env_getter: Callable[[str, str], str]) -> Dict[str, Any
     hard_ratio = min(max(_env_float(env_getter, 'OPENAI_TRADE_HARD_BUDGET_RATIO', 0.95), soft_ratio), 1.0)
     return {
         'enabled': _env_bool(env_getter, 'OPENAI_TRADE_ENABLE', True),
-        'model': str(env_getter('OPENAI_TRADE_MODEL', 'gpt-5.4') or 'gpt-5.4').strip(),
+        'model': str(env_getter('OPENAI_TRADE_MODEL', 'gpt-5.4-mini') or 'gpt-5.4-mini').strip(),
         'upgrade_model': str(env_getter('OPENAI_TRADE_UPGRADE_MODEL', 'gpt-5.4') or 'gpt-5.4').strip(),
         'fallback_model': str(env_getter('OPENAI_TRADE_FALLBACK_MODEL', 'gpt-5.4-mini') or 'gpt-5.4-mini').strip(),
+        'allow_upgrade_model': _env_bool(env_getter, 'OPENAI_TRADE_ALLOW_UPGRADE', False),
         'monthly_budget_twd': monthly_budget_twd,
         'soft_budget_twd': round(monthly_budget_twd * soft_ratio, 2),
         'hard_budget_twd': round(monthly_budget_twd * hard_ratio, 2),
@@ -47,7 +48,7 @@ def default_trade_config(env_getter: Callable[[str, str], str]) -> Dict[str, Any
         'input_price_per_1m_usd': max(_env_float(env_getter, 'OPENAI_TRADE_PRICE_INPUT_PER_1M_USD', 0.75), 0.0),
         'output_price_per_1m_usd': max(_env_float(env_getter, 'OPENAI_TRADE_PRICE_OUTPUT_PER_1M_USD', 4.50), 0.0),
         'cached_input_price_per_1m_usd': max(_env_float(env_getter, 'OPENAI_TRADE_PRICE_CACHED_INPUT_PER_1M_USD', 0.075), 0.0),
-        'top_k_per_scan': max(_env_int(env_getter, 'OPENAI_TRADE_TOP_K', 5), 1),
+        'top_k_per_scan': max(_env_int(env_getter, 'OPENAI_TRADE_TOP_K', 2), 1),
         'cooldown_minutes': max(_env_int(env_getter, 'OPENAI_TRADE_SYMBOL_COOLDOWN_MINUTES', 180), 1),
         'global_min_interval_minutes': max(_env_int(env_getter, 'OPENAI_TRADE_GLOBAL_MIN_INTERVAL_MINUTES', 15), 0),
         'min_score_abs': max(_env_float(env_getter, 'OPENAI_TRADE_MIN_SCORE', 38.0), 0.0),
@@ -55,12 +56,12 @@ def default_trade_config(env_getter: Callable[[str, str], str]) -> Dict[str, Any
         'max_margin_pct': min(max(_env_float(env_getter, 'OPENAI_TRADE_MAX_MARGIN_PCT', 0.08), 0.01), 0.8),
         'min_leverage': max(_env_int(env_getter, 'OPENAI_TRADE_MIN_LEVERAGE', 4), 1),
         'max_leverage': max(_env_int(env_getter, 'OPENAI_TRADE_MAX_LEVERAGE', 25), 1),
-        'max_output_tokens': max(_env_int(env_getter, 'OPENAI_TRADE_MAX_OUTPUT_TOKENS', 4096), 800),
-        'request_timeout_sec': max(_env_float(env_getter, 'OPENAI_TRADE_TIMEOUT_SEC', 60.0), 5.0),
+        'max_output_tokens': max(_env_int(env_getter, 'OPENAI_TRADE_MAX_OUTPUT_TOKENS', 1536), 800),
+        'request_timeout_sec': max(_env_float(env_getter, 'OPENAI_TRADE_TIMEOUT_SEC', 45.0), 5.0),
         'temperature': 0.2,
         'base_url': str(env_getter('OPENAI_RESPONSES_URL', 'https://api.openai.com/v1/responses') or 'https://api.openai.com/v1/responses').strip(),
-        'reasoning_effort': str(env_getter('OPENAI_TRADE_REASONING_EFFORT', 'medium') or 'medium').strip(),
-        'retry_reasoning_effort': str(env_getter('OPENAI_TRADE_RETRY_REASONING_EFFORT', 'low') or 'low').strip(),
+        'reasoning_effort': str(env_getter('OPENAI_TRADE_REASONING_EFFORT', 'low') or 'low').strip(),
+        'retry_reasoning_effort': str(env_getter('OPENAI_TRADE_RETRY_REASONING_EFFORT', '') or '').strip(),
     }
 
 
@@ -115,6 +116,28 @@ def _round(value: Any, digits: int = 4) -> float:
         return 0.0
 
 
+def _short_text(value: Any, limit: int = 180) -> str:
+    return str(value or '').replace('\n', ' ').strip()[:max(int(limit), 1)]
+
+
+def _compact_mapping(data: Dict[str, Any], keys: list[str], *, text_limit: int = 160) -> Dict[str, Any]:
+    src = dict(data or {})
+    out: Dict[str, Any] = {}
+    for key in keys:
+        if key not in src:
+            continue
+        value = src.get(key)
+        if isinstance(value, (int, float, bool)) or value is None:
+            out[key] = value
+        elif isinstance(value, list):
+            out[key] = [_short_text(x, text_limit) for x in value[:5]]
+        elif isinstance(value, dict):
+            out[key] = {str(k): _short_text(v, text_limit) for k, v in list(value.items())[:10]}
+        else:
+            out[key] = _short_text(value, text_limit)
+    return out
+
+
 def _clamp(value: Any, low: float, high: float) -> float:
     try:
         v = float(value)
@@ -144,7 +167,7 @@ def _stable_payload(candidate: Dict[str, Any]) -> Dict[str, Any]:
         'rr_ratio': candidate.get('rr_ratio'),
         'market_pattern': ((candidate.get('market') or {}).get('pattern')),
         'market_direction': ((candidate.get('market') or {}).get('direction')),
-        'breakdown': candidate.get('breakdown_full') or {},
+        'breakdown': candidate.get('breakdown') or {},
         'market_context': candidate.get('market_context') or {},
         'execution_policy': candidate.get('execution_policy') or {},
         'constraints': candidate.get('constraints') or {},
@@ -179,11 +202,35 @@ def build_candidate_payload(
     market_context = dict(signal.get('openai_market_context') or {})
     style = dict((market_context.get('style') or {}))
     execution_policy = dict((market_context.get('execution_policy') or {}))
+    compact_breakdown = _compact_mapping(
+        breakdown,
+        [
+            'Setup', 'Regime', 'RegimeConf', 'RegimeConfidence', 'RegimeDir', 'RegimeBias',
+            'MarketState', 'MarketStateConf', 'MarketTempo', 'TrendConfidence', '方向信心',
+            'RR', 'EntryGate', '進場品質', 'ChaseRisk', '追價風險', 'VolRatio',
+            'PreBreakoutScore', 'PreBreakoutDirection', 'PreBreakoutPhase',
+            'AIScoreCoverage', 'AISampleCount', 'LearnEdge', 'SignalQuality',
+            'VWAPDistanceATR', 'EMA20DistanceATR', 'SRDistanceATR',
+        ],
+        text_limit=140,
+    )
+    compact_market_context = {
+        'style': _compact_mapping(style, ['holding_period', 'trade_goal', 'decision_priority'], text_limit=120),
+        'latest_closed_candle': _compact_mapping(dict(market_context.get('latest_closed_candle') or {}), ['direction', 'shape', 'body_pct', 'upper_wick_pct', 'lower_wick_pct', 'range_pct_of_price', 'close_position_pct'], text_limit=80),
+        'momentum': _compact_mapping(dict(market_context.get('momentum') or {}), ['long_score', 'short_score', 'signals', 'trend_4h_up', 'trend_1d_up', 'higher_lows', 'lower_highs', 'volume_build', 'compression'], text_limit=120),
+        'levels': _compact_mapping(dict(market_context.get('levels') or {}), ['dist_high_atr', 'dist_low_atr', 'nearest_support', 'nearest_resistance'], text_limit=80),
+        'execution_context': _compact_mapping(dict(market_context.get('execution_context') or {}), ['spread_pct', 'mark_last_deviation_pct', 'top_depth_ratio', 'api_error_streak', 'status', 'notes'], text_limit=120),
+    }
+    compact_reference = _compact_mapping(
+        dict(signal.get('external_reference') or signal.get('reference_context') or signal.get('scanner_reference') or {}),
+        ['summary', 'bias', 'setup', 'risk', 'note', 'source'],
+        text_limit=180,
+    )
     return {
         'symbol': str(signal.get('symbol') or ''),
         'side': 'long' if float(signal.get('score', 0) or 0) >= 0 else 'short',
         'trade_style': str(constraints.get('trade_style') or style.get('holding_period') or 'short_term_intraday'),
-        'signal_desc': str(signal.get('desc') or '')[:420],
+        'signal_desc': _short_text(signal.get('desc'), 240),
         'rank': int(rank_index) + 1,
         'score': _round(signal.get('score'), 4),
         'raw_score': _round(signal.get('raw_score', signal.get('score')), 4),
@@ -200,15 +247,15 @@ def build_candidate_payload(
         'signal_grade': str(signal.get('signal_grade') or breakdown.get('等級') or ''),
         'trend_confidence': _round(signal.get('trend_confidence'), 4),
         'rotation_adj': _round(signal.get('rotation_adj'), 4),
-        'breakdown_full': breakdown,
-        'execution_quality': execution_quality,
+        'breakdown': compact_breakdown,
+        'execution_quality': _compact_mapping(execution_quality, ['execution_score', 'score', 'label', 'spread_pct', 'depth5', 'mark_last_dev_pct', 'penalty', 'reasons'], text_limit=120),
         'market': {
             'pattern': str(market.get('pattern') or ''),
             'direction': str(market.get('direction') or ''),
             'strength': _round(market.get('strength'), 4),
-            'prediction': str(market.get('prediction') or '')[:240],
+            'prediction': _short_text(market.get('prediction'), 180),
         },
-        'market_context': market_context,
+        'market_context': compact_market_context,
         'risk': {
             'trading_ok': bool(risk_status.get('trading_ok', True)),
             'halt_reason': str(risk_status.get('halt_reason') or '')[:180],
@@ -221,9 +268,9 @@ def build_candidate_payload(
             'same_direction_count': int(portfolio.get('same_direction_count', 0) or 0),
             'open_symbols': list(portfolio.get('open_symbols') or [])[:8],
         },
-        'execution_policy': execution_policy,
-        'reference_context': dict(signal.get('external_reference') or signal.get('reference_context') or signal.get('scanner_reference') or {}),
-        'top_candidates': list(top_candidates or [])[:5],
+        'execution_policy': _compact_mapping(execution_policy, ['fixed_leverage', 'leverage_mode', 'min_order_margin_usdt', 'fixed_order_notional_usdt', 'margin_pct_range'], text_limit=80),
+        'reference_context': compact_reference,
+        'top_candidates': list(top_candidates or [])[:3],
         'constraints': dict(constraints or {}),
     }
 
@@ -244,6 +291,7 @@ def _short_label(status: str) -> str:
         'permission_error': 'OpenAI permission error',
         'bad_request': 'OpenAI bad request',
         'rate_limit': 'OpenAI rate limit',
+        'empty_response': 'OpenAI empty response',
         'error': 'OpenAI error',
     }
     return mapping.get(str(status or ''), str(status or 'unknown'))
@@ -403,15 +451,16 @@ def _build_messages(candidate: Dict[str, Any]) -> list[Dict[str, Any]]:
         'Use every field in the candidate payload, especially the multi-timeframe market context, '
         'the latest closed candle shape, momentum, volatility, volume expansion, execution context, risk state, '
         'and any external/reference analysis attached in the payload. '
-        'Produce a tactical execution plan, not a generic summary. '
-        'Think deeply about structure, trigger quality, liquidity, stop placement, and whether the move is better handled as a pullback limit order or an aggressive market chase. '
+        'Produce a concise tactical execution plan, not a generic summary. '
+        'Do not write hidden chain-of-thought; decide from the supplied fields and output JSON immediately. '
+        'Evaluate structure, trigger quality, liquidity, stop placement, and whether the move is better handled as a pullback limit order or an aggressive market chase. '
         'Be aggressive but not reckless: when the setup is genuinely strong, do not become timid; when the setup is messy, explicitly stand down. '
         'Assume the bot will execute with the exchange maximum leverage for this symbol. '
         'Your job is to decide whether the setup is worth trading now, whether entry should be market or limit, '
         'where the entry should be placed, whether a missed entry can still be chased, and what stop loss / take profit best fit a short-term trade. '
         'Stop loss and take profit must be practical and tightly linked to market structure, liquidity, or volatility. '
         'Only reject the trade when the setup is clearly weak, conflicting, or poorly priced. '
-        'Return valid JSON only.'
+        'Return valid JSON only, with short field values.'
     )
     user_text = (
         f'Decide whether to place a {trade_style} crypto perpetual futures order.\n'
@@ -451,9 +500,9 @@ def _build_request_body(
     max_output_tokens: int | None = None,
 ) -> Dict[str, Any]:
     body = {
-        'model': str(model or config.get('model') or 'gpt-5.4'),
+        'model': str(model or config.get('model') or 'gpt-5.4-mini'),
         'input': _build_messages(candidate),
-        'max_output_tokens': int(max_output_tokens or config.get('max_output_tokens', 4096) or 4096),
+        'max_output_tokens': int(max_output_tokens or config.get('max_output_tokens', 1536) or 1536),
     }
     effort = str(reasoning_effort if reasoning_effort is not None else config.get('reasoning_effort') or '').strip()
     if effort:
@@ -663,16 +712,17 @@ def consult_trade_decision(
         primary_model = str(config.get('model') or 'gpt-5.4').strip()
         upgrade_model = str(config.get('upgrade_model') or 'gpt-5.4').strip()
         fallback_model = str(config.get('fallback_model') or '').strip()
+        allow_upgrade = bool(config.get('allow_upgrade_model', False))
         retry_effort = str(config.get('retry_reasoning_effort') or 'low').strip()
-        max_tokens = int(config.get('max_output_tokens', 4096) or 4096)
+        max_tokens = int(config.get('max_output_tokens', 1536) or 1536)
         attempts = [
             {'model': primary_model, 'structured': True, 'effort': str(config.get('reasoning_effort') or 'medium').strip(), 'max_tokens': max_tokens},
-            {'model': primary_model, 'structured': False, 'effort': retry_effort, 'max_tokens': max(max_tokens, 4096)},
+            {'model': primary_model, 'structured': False, 'effort': retry_effort, 'max_tokens': max(max_tokens, 1536)},
         ]
-        if upgrade_model and upgrade_model != primary_model:
-            attempts.append({'model': upgrade_model, 'structured': True, 'effort': retry_effort, 'max_tokens': max(max_tokens, 4096)})
+        if allow_upgrade and upgrade_model and upgrade_model != primary_model and rank <= 1 and score_abs >= max(float(config.get('min_score_abs', 38.0) or 38.0), 52.0):
+            attempts.append({'model': upgrade_model, 'structured': True, 'effort': retry_effort, 'max_tokens': max(max_tokens, 1536)})
         if fallback_model and fallback_model != primary_model:
-            attempts.append({'model': fallback_model, 'structured': True, 'effort': retry_effort, 'max_tokens': max(max_tokens, 4096)})
+            attempts.append({'model': fallback_model, 'structured': True, 'effort': retry_effort, 'max_tokens': max(max_tokens, 1536)})
 
         body = {}
         raw_text = ''
@@ -680,6 +730,10 @@ def consult_trade_decision(
         selected_model = primary_model
         selected_attempt = {}
         empty_details = []
+        total_input_tokens = 0
+        total_output_tokens = 0
+        total_cached_input_tokens = 0
+        actual_calls = 0
         for attempt_index, attempt in enumerate(attempts):
             selected_attempt = dict(attempt)
             selected_model = str(attempt.get('model') or primary_model)
@@ -706,7 +760,7 @@ def consult_trade_decision(
                     structured=False,
                     model=selected_model,
                     reasoning_effort=retry_effort,
-                    max_output_tokens=max(max_tokens, 4096),
+                    max_output_tokens=max(max_tokens, 1536),
                 )
                 resp = requests.post(base_url, headers=headers, json=request_body, timeout=timeout_sec)
             if resp.status_code in (403, 404, 429) and attempt_index < len(attempts) - 1:
@@ -724,6 +778,11 @@ def consult_trade_decision(
                 continue
             resp.raise_for_status()
             body = resp.json()
+            usage_i = _response_usage(body)
+            total_input_tokens += int(usage_i.get('input_tokens', 0) or 0)
+            total_output_tokens += int(usage_i.get('output_tokens', 0) or 0)
+            total_cached_input_tokens += int(usage_i.get('input_cached_tokens', usage_i.get('cached_input_tokens', 0)) or 0)
+            actual_calls += 1
             raw_text = _extract_text(body)
             raw_json = _parse_json_text(raw_text)
             if raw_json:
@@ -737,12 +796,52 @@ def consult_trade_decision(
             if logger:
                 logger('OpenAI empty/invalid JSON response: {} | {}'.format(symbol, empty_details[-1]))
         if not raw_json:
-            raise RuntimeError('OpenAI returned no parseable trade JSON after retries: {}'.format(' ; '.join(empty_details)))
+            est_cost_usd = estimate_cost_usd(config, input_tokens=total_input_tokens, output_tokens=total_output_tokens, cached_input_tokens=total_cached_input_tokens)
+            est_cost_twd = est_cost_usd * float(config.get('usd_to_twd', 32.0) or 32.0)
+            detail = 'OpenAI returned no parseable trade JSON after retries: {}'.format(' ; '.join(empty_details))
+            symbol_state.update({
+                'last_payload_hash': payload_hash,
+                'last_sent_ts': now_ts,
+                'last_model': selected_model,
+                'last_decision': {},
+                'last_status': 'empty_response',
+                'last_response_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'last_cost_twd': round(est_cost_twd, 4),
+                'last_attempt': dict(selected_attempt),
+                'last_error': detail[:300],
+            })
+            state.setdefault('symbols', {})[symbol] = symbol_state
+            state['api_calls'] = int(state.get('api_calls', 0) or 0) + max(actual_calls, 1)
+            state['input_tokens'] = int(state.get('input_tokens', 0) or 0) + total_input_tokens
+            state['output_tokens'] = int(state.get('output_tokens', 0) or 0) + total_output_tokens
+            state['cached_input_tokens'] = int(state.get('cached_input_tokens', 0) or 0) + total_cached_input_tokens
+            state['last_consulted_ts'] = now_ts
+            state['last_top_candidates_signature'] = top_signature
+            state['spent_estimated_usd'] = round(float(state.get('spent_estimated_usd', 0.0) or 0.0) + est_cost_usd, 6)
+            state['spent_estimated_twd'] = round(float(state.get('spent_estimated_twd', 0.0) or 0.0) + est_cost_twd, 4)
+            state['last_error'] = detail[:300]
+            state['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            _append_recent(state, _build_recent_item(candidate, status='empty_response', detail=detail[:260], model=selected_model))
+            save_trade_state(state_path, state)
+            return state, {
+                'status': 'empty_response',
+                'decision': None,
+                'payload_hash': payload_hash,
+                'symbol_state': symbol_state,
+                'usage': {
+                    'input_tokens': total_input_tokens,
+                    'output_tokens': total_output_tokens,
+                    'cached_input_tokens': total_cached_input_tokens,
+                },
+                'estimated_cost_twd': round(est_cost_twd, 4),
+                'estimated_cost_usd': round(est_cost_usd, 6),
+                'error': detail,
+            }
         decision = _normalize_decision(raw_json, candidate)
         usage = dict(body.get('usage') or {})
-        input_tokens = int(usage.get('input_tokens', 0) or 0)
-        output_tokens = int(usage.get('output_tokens', 0) or 0)
-        cached_input_tokens = int(usage.get('input_cached_tokens', usage.get('cached_input_tokens', 0)) or 0)
+        input_tokens = total_input_tokens or int(usage.get('input_tokens', 0) or 0)
+        output_tokens = total_output_tokens or int(usage.get('output_tokens', 0) or 0)
+        cached_input_tokens = total_cached_input_tokens or int(usage.get('input_cached_tokens', usage.get('cached_input_tokens', 0)) or 0)
         est_cost_usd = estimate_cost_usd(config, input_tokens=input_tokens, output_tokens=output_tokens, cached_input_tokens=cached_input_tokens)
         est_cost_twd = est_cost_usd * float(config.get('usd_to_twd', 32.0) or 32.0)
 
