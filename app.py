@@ -6925,6 +6925,122 @@ def _fixed_order_notional_usdt_for_symbol(symbol):
     return float(FIXED_ORDER_NOTIONAL_USDT if _is_crypto_usdt_swap_symbol(symbol) else FIXED_STOCK_ORDER_NOTIONAL_USDT)
 
 
+def _mtf_pressure_structure_snapshot(df, timeframe, current_price=0.0):
+    if df is None or len(df) < 20:
+        return {}
+    closed_df = df.iloc[:-1].copy() if len(df) >= 30 else df.copy()
+    if closed_df is None or len(closed_df) < 20:
+        closed_df = df.copy()
+    if closed_df is None or len(closed_df) < 20:
+        return {}
+    c = closed_df['c'].astype(float)
+    h = closed_df['h'].astype(float)
+    l = closed_df['l'].astype(float)
+    v = closed_df['v'].astype(float)
+    last = float(c.iloc[-1])
+    price = _safe_num(current_price, last) or last
+    atr = max(safe_last(ta.atr(h, l, c, length=14), last * 0.006), last * 0.003, 1e-9)
+    ema20 = safe_last(ta.ema(c, length=20), last)
+    ema50 = safe_last(ta.ema(c, length=50), last)
+    upper_window = min(len(h), 50)
+    lower_window = min(len(l), 50)
+    range_high_20 = float(h.tail(min(len(h), 20)).max())
+    range_low_20 = float(l.tail(min(len(l), 20)).min())
+    range_high_50 = float(h.tail(upper_window).max())
+    range_low_50 = float(l.tail(lower_window).min())
+    recent_highs = h.tail(min(len(h), 6)).tolist()
+    recent_lows = l.tail(min(len(l), 6)).tolist()
+    hh_count = 0
+    hl_count = 0
+    lh_count = 0
+    ll_count = 0
+    for idx in range(1, len(recent_highs)):
+        if recent_highs[idx] > recent_highs[idx - 1]:
+            hh_count += 1
+        elif recent_highs[idx] < recent_highs[idx - 1]:
+            lh_count += 1
+    for idx in range(1, len(recent_lows)):
+        if recent_lows[idx] > recent_lows[idx - 1]:
+            hl_count += 1
+        elif recent_lows[idx] < recent_lows[idx - 1]:
+            ll_count += 1
+    trend_stack = 'bullish' if last >= ema20 >= ema50 else 'bearish' if last <= ema20 <= ema50 else 'mixed'
+    swing_bias = 'bullish' if hh_count >= 3 and hl_count >= 3 else 'bearish' if lh_count >= 3 and ll_count >= 3 else 'mixed'
+    structure_bias = trend_stack if trend_stack == swing_bias else ('bullish' if trend_stack == 'bullish' and hl_count >= ll_count else 'bearish' if trend_stack == 'bearish' and ll_count >= hl_count else 'mixed')
+    prior_high = float(h.iloc[-7:-1].max()) if len(h) >= 7 else range_high_20
+    prior_low = float(l.iloc[-7:-1].min()) if len(l) >= 7 else range_low_20
+    recent_break = 'breakout' if last > prior_high else 'breakdown' if last < prior_low else 'inside'
+    pressure_candidates = [x for x in [range_high_20, range_high_50, prior_high] if x > price]
+    support_candidates = [x for x in [range_low_20, range_low_50, prior_low] if x < price]
+    pressure_price = min(pressure_candidates) if pressure_candidates else max(range_high_20, range_high_50, prior_high)
+    support_price = max(support_candidates) if support_candidates else min(range_low_20, range_low_50, prior_low)
+    pressure_dist = max((pressure_price - price) / max(price, 1e-9) * 100.0, 0.0)
+    support_dist = max((price - support_price) / max(price, 1e-9) * 100.0, 0.0)
+    pressure_dist_atr = max((pressure_price - price) / atr, 0.0)
+    support_dist_atr = max((price - support_price) / atr, 0.0)
+    volume_ratio = float(v.tail(5).mean()) / max(float(v.tail(20).mean()), 1e-9)
+    return {
+        'timeframe': str(timeframe),
+        'last_close': _safe_round_metric(last, 8),
+        'atr': _safe_round_metric(atr, 8),
+        'trend_stack': trend_stack,
+        'swing_bias': swing_bias,
+        'structure_bias': structure_bias,
+        'recent_break': recent_break,
+        'hh_count': int(hh_count),
+        'hl_count': int(hl_count),
+        'lh_count': int(lh_count),
+        'll_count': int(ll_count),
+        'ema20': _safe_round_metric(ema20, 8),
+        'ema50': _safe_round_metric(ema50, 8),
+        'close_vs_ema20_pct': _safe_round_metric((last - ema20) / max(last, 1e-9) * 100.0, 3),
+        'close_vs_ema50_pct': _safe_round_metric((last - ema50) / max(last, 1e-9) * 100.0, 3),
+        'pressure_price': _safe_round_metric(pressure_price, 8),
+        'support_price': _safe_round_metric(support_price, 8),
+        'pressure_distance_pct': _safe_round_metric(pressure_dist, 3),
+        'support_distance_pct': _safe_round_metric(support_dist, 3),
+        'pressure_distance_atr': _safe_round_metric(pressure_dist_atr, 3),
+        'support_distance_atr': _safe_round_metric(support_dist_atr, 3),
+        'range_high_20': _safe_round_metric(range_high_20, 8),
+        'range_low_20': _safe_round_metric(range_low_20, 8),
+        'range_high_50': _safe_round_metric(range_high_50, 8),
+        'range_low_50': _safe_round_metric(range_low_50, 8),
+        'volume_ratio': _safe_round_metric(volume_ratio, 3),
+    }
+
+
+def _summarize_mtf_structure_pressure(structure_map, side):
+    rows = [dict(v or {}) for v in list((structure_map or {}).values()) if isinstance(v, dict) and v]
+    if not rows:
+        return {}
+    side = str(side or '').lower()
+    blocking_key = 'pressure_distance_atr' if side == 'long' else 'support_distance_atr'
+    backing_key = 'support_distance_atr' if side == 'long' else 'pressure_distance_atr'
+    blocking_price_key = 'pressure_price' if side == 'long' else 'support_price'
+    backing_price_key = 'support_price' if side == 'long' else 'pressure_price'
+    valid_blocking = [r for r in rows if _safe_num(r.get(blocking_key), 0.0) > 0]
+    valid_backing = [r for r in rows if _safe_num(r.get(backing_key), 0.0) > 0]
+    nearest_blocking = min(valid_blocking, key=lambda r: _safe_num(r.get(blocking_key), 9999.0)) if valid_blocking else {}
+    nearest_backing = min(valid_backing, key=lambda r: _safe_num(r.get(backing_key), 9999.0)) if valid_backing else {}
+    bullish_count = sum(1 for r in rows if str(r.get('structure_bias') or '') == 'bullish')
+    bearish_count = sum(1 for r in rows if str(r.get('structure_bias') or '') == 'bearish')
+    aligned_count = bullish_count if side == 'long' else bearish_count
+    opposing_count = bearish_count if side == 'long' else bullish_count
+    return {
+        'side': side,
+        'aligned_timeframes': int(aligned_count),
+        'opposing_timeframes': int(opposing_count),
+        'nearest_blocking_timeframe': str(nearest_blocking.get('timeframe') or ''),
+        'nearest_blocking_price': _safe_round_metric(nearest_blocking.get(blocking_price_key), 8),
+        'nearest_blocking_distance_atr': _safe_round_metric(nearest_blocking.get(blocking_key), 3),
+        'nearest_backing_timeframe': str(nearest_backing.get('timeframe') or ''),
+        'nearest_backing_price': _safe_round_metric(nearest_backing.get(backing_price_key), 8),
+        'nearest_backing_distance_atr': _safe_round_metric(nearest_backing.get(backing_key), 3),
+        'stacked_blocking_within_1atr': int(sum(1 for r in valid_blocking if _safe_num(r.get(blocking_key), 99.0) <= 1.0)),
+        'stacked_blocking_within_2atr': int(sum(1 for r in valid_blocking if _safe_num(r.get(blocking_key), 99.0) <= 2.0)),
+    }
+
+
 def _build_openai_short_term_context(sig, market_info, constraints):
     symbol = str(sig.get('symbol') or '')
     side = 'long' if float(sig.get('score', 0) or 0) >= 0 else 'short'
@@ -6984,6 +7100,12 @@ def _build_openai_short_term_context(sig, market_info, constraints):
         'distance_to_support_pct': _safe_round_metric(((price - support) / max(price, 1e-9) * 100.0) if support > 0 and price > 0 else 0.0, 3),
         'distance_to_resistance_pct': _safe_round_metric(((resist - price) / max(price, 1e-9) * 100.0) if resist > 0 and price > 0 else 0.0, 3),
     }
+    mtf_pressure_structure = {}
+    for tf in ('15m', '1h', '4h', '1d'):
+        snap = _mtf_pressure_structure_snapshot(raw_frames.get(tf), tf, price)
+        if snap:
+            mtf_pressure_structure[tf] = snap
+    mtf_pressure_summary = _summarize_mtf_structure_pressure(mtf_pressure_structure, side)
     reference_context = dict(sig.get('external_reference') or sig.get('reference_context') or sig.get('scanner_reference') or {})
 
     return {
@@ -7024,6 +7146,8 @@ def _build_openai_short_term_context(sig, market_info, constraints):
             'support_resistance': breakout_ctx,
         },
         'multi_timeframe': tf_data,
+        'multi_timeframe_pressure': mtf_pressure_structure,
+        'multi_timeframe_pressure_summary': mtf_pressure_summary,
         'pre_breakout_radar': radar,
         'execution_context': execution_context,
         'reference_context': reference_context,
