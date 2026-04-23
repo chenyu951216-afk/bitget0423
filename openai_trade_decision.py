@@ -62,7 +62,7 @@ def default_trade_config(env_getter: Callable[[str, str], str]) -> Dict[str, Any
         'temperature': 0.2,
         'base_url': str(env_getter('OPENAI_RESPONSES_URL', 'https://api.openai.com/v1/responses') or 'https://api.openai.com/v1/responses').strip(),
         'reasoning_effort': str(env_getter('OPENAI_TRADE_REASONING_EFFORT', 'medium') or 'medium').strip(),
-        'retry_reasoning_effort': str(env_getter('OPENAI_TRADE_RETRY_REASONING_EFFORT', '') or '').strip(),
+        'retry_reasoning_effort': str(env_getter('OPENAI_TRADE_RETRY_REASONING_EFFORT', 'low') or 'low').strip(),
         'advice_ttl_minutes': max(_env_int(env_getter, 'OPENAI_TRADE_ADVICE_TTL_MINUTES', 240), 15),
     }
 
@@ -224,10 +224,25 @@ def build_candidate_payload(
     )
     compact_market_context = {
         'style': _compact_mapping(style, ['holding_period', 'trade_goal', 'decision_priority'], text_limit=120),
+        'signal_context': _compact_mapping(dict(market_context.get('signal_context') or {}), ['side', 'score', 'raw_score', 'priority_score', 'entry_quality', 'rr_ratio', 'setup_label', 'signal_grade', 'regime', 'regime_confidence', 'trend_confidence', 'rotation_adj', 'score_jump', 'atr_15m', 'atr_4h'], text_limit=80),
         'latest_closed_candle': _compact_mapping(dict(market_context.get('latest_closed_candle') or {}), ['direction', 'shape', 'body_pct', 'upper_wick_pct', 'lower_wick_pct', 'range_pct_of_price', 'close_position_pct'], text_limit=80),
         'momentum': _compact_mapping(dict(market_context.get('momentum') or {}), ['long_score', 'short_score', 'signals', 'trend_4h_up', 'trend_1d_up', 'higher_lows', 'lower_highs', 'volume_build', 'compression'], text_limit=120),
         'levels': _compact_mapping(dict(market_context.get('levels') or {}), ['dist_high_atr', 'dist_low_atr', 'nearest_support', 'nearest_resistance'], text_limit=80),
+        'market_state': {
+            'ticker': _compact_mapping(dict(((market_context.get('market_state') or {}).get('ticker') or {})), ['last', 'bid', 'ask', 'spread_pct', 'quote_volume', 'percentage_24h', 'change_24h', 'high_24h', 'low_24h'], text_limit=80),
+            'support_resistance': _compact_mapping(dict(((market_context.get('market_state') or {}).get('support_resistance') or {})), ['support', 'resistance', 'distance_to_support_pct', 'distance_to_resistance_pct'], text_limit=80),
+        },
+        'pre_breakout_radar': _compact_mapping(dict(market_context.get('pre_breakout_radar') or {}), ['ready', 'phase', 'direction', 'score', 'summary', 'note', 'signals', 'tags'], text_limit=120),
         'execution_context': _compact_mapping(dict(market_context.get('execution_context') or {}), ['spread_pct', 'mark_last_deviation_pct', 'top_depth_ratio', 'api_error_streak', 'status', 'notes'], text_limit=120),
+        'multi_timeframe_pressure_summary': _compact_mapping(dict(market_context.get('multi_timeframe_pressure_summary') or {}), ['side', 'aligned_timeframes', 'opposing_timeframes', 'nearest_blocking_timeframe', 'nearest_blocking_price', 'nearest_blocking_distance_atr', 'nearest_backing_timeframe', 'nearest_backing_price', 'nearest_backing_distance_atr', 'stacked_blocking_within_1atr', 'stacked_blocking_within_2atr'], text_limit=80),
+        'multi_timeframe_pressure': {
+            str(tf): _compact_mapping(
+                dict(row or {}),
+                ['structure_bias', 'trend_stack', 'swing_bias', 'recent_break', 'pressure_price', 'support_price', 'pressure_distance_pct', 'support_distance_pct', 'pressure_distance_atr', 'support_distance_atr', 'close_vs_ema20_pct', 'close_vs_ema50_pct', 'volume_ratio', 'hh_count', 'hl_count', 'lh_count', 'll_count'],
+                text_limit=80,
+            )
+            for tf, row in list(dict(market_context.get('multi_timeframe_pressure') or {}).items())[:4]
+        },
     }
     compact_reference = _compact_mapping(
         dict(signal.get('external_reference') or signal.get('reference_context') or signal.get('scanner_reference') or {}),
@@ -497,6 +512,10 @@ def _build_messages(candidate: Dict[str, Any]) -> list[Dict[str, Any]]:
         'Do not write hidden chain-of-thought; decide from the supplied fields and output JSON immediately. '
         'Evaluate structure, trigger quality, liquidity, stop placement, and whether the move is better handled as a pullback limit order or an aggressive market chase. '
         'Use numeric evidence first: trend alignment, entry quality, RR, liquidity/spread, volatility, portfolio exposure, and invalidation distance. '
+        'Use your broad crypto perpetual market knowledge to interpret these supplied fields: squeeze behavior, liquidation-prone extensions, VWAP/EMA holds or losses, failed breakouts, failed breakdowns, retests, exhaustion, and volume-confirmed continuation. '
+        'However, do not assume unseen external data, hidden order flow, or fresh news beyond the payload; if the payload is missing confirmation, reflect that through the plan and confidence rather than inventing facts. '
+        'Cross-check the payload before deciding: when signals conflict, prioritize the latest closed candles, multi-timeframe pressure, execution quality, invalidation distance, and the closest real structure levels. '
+        'If some supplied features look noisy or inconsistent, do not blindly trust them; reconcile them against the rest of the payload, lower confidence, tighten the watch trigger, or stand down instead of forcing a trade. '
         'Prefer precise execution over narrative: produce one best executable plan, with exact prices anchored to supplied structure, not vague zones unless the watch plan is intentionally zone-based. '
         'Optimize for practical win rate and clean expectancy, but stay only slightly conservative: avoid low-quality chasing, while still approving strong or reasonably clean pullback entries instead of becoming overly timid. '
         'When the setup is decent but a little extended, prefer a precise wait-for-pullback or wait-for-confirmation plan rather than rejecting a still-viable thesis. '
@@ -519,6 +538,7 @@ def _build_messages(candidate: Dict[str, Any]) -> list[Dict[str, Any]]:
         '- order_type must be market or limit\n'
         '- stop_loss and take_profit must be valid for the side and are mandatory exchange protection orders\n'
         '- use the candidate entry_price / stop_loss / take_profit, market_context levels, latest candle, and execution quality as the primary anchors; only deviate when structure clearly justifies it\n'
+        '- use the supplied 15m / 1h / 4h / 1d multi_timeframe_pressure and multi_timeframe_pressure_summary fields heavily when deciding whether price is too close to overhead pressure, sitting on support, or breaking structure cleanly\n'
         '- choose the single highest-quality executable path right now: either market now, limit at a precise pullback/retest, or no trade yet with a precise recheck trigger\n'
         '- be slightly selective, not overly selective: if the thesis is still good but current price is a bit stretched, prefer a better limit entry or confirmation trigger instead of a blanket rejection\n'
         '- entry_price must be a real actionable price, not a storytelling placeholder; avoid loose round-number guesses unless the payload structure supports them\n'
