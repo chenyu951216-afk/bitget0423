@@ -48,9 +48,10 @@ def default_trade_config(env_getter: Callable[[str, str], str]) -> Dict[str, Any
         'input_price_per_1m_usd': max(_env_float(env_getter, 'OPENAI_TRADE_PRICE_INPUT_PER_1M_USD', 0.75), 0.0),
         'output_price_per_1m_usd': max(_env_float(env_getter, 'OPENAI_TRADE_PRICE_OUTPUT_PER_1M_USD', 4.50), 0.0),
         'cached_input_price_per_1m_usd': max(_env_float(env_getter, 'OPENAI_TRADE_PRICE_CACHED_INPUT_PER_1M_USD', 0.075), 0.0),
-        'top_k_per_scan': max(_env_int(env_getter, 'OPENAI_TRADE_TOP_K', 2), 1),
+        'top_k_per_scan': max(_env_int(env_getter, 'OPENAI_TRADE_TOP_K', 10), 1),
+        'sends_per_scan': max(_env_int(env_getter, 'OPENAI_TRADE_SENDS_PER_SCAN', 1), 1),
         'cooldown_minutes': max(_env_int(env_getter, 'OPENAI_TRADE_SYMBOL_COOLDOWN_MINUTES', 180), 1),
-        'global_min_interval_minutes': max(_env_int(env_getter, 'OPENAI_TRADE_GLOBAL_MIN_INTERVAL_MINUTES', 15), 0),
+        'global_min_interval_minutes': max(_env_int(env_getter, 'OPENAI_TRADE_GLOBAL_MIN_INTERVAL_MINUTES', 0), 0),
         'min_score_abs': max(_env_float(env_getter, 'OPENAI_TRADE_MIN_SCORE', 38.0), 0.0),
         'min_margin_pct': min(max(_env_float(env_getter, 'OPENAI_TRADE_MIN_MARGIN_PCT', 0.03), 0.005), 0.5),
         'max_margin_pct': min(max(_env_float(env_getter, 'OPENAI_TRADE_MAX_MARGIN_PCT', 0.08), 0.01), 0.8),
@@ -285,6 +286,7 @@ def _short_label(status: str) -> str:
         'budget_paused': 'Budget paused',
         'below_min_score': 'Score below filter',
         'not_ranked': 'Outside OpenAI top K',
+        'review_deferred': 'Queued for later review',
         'disabled': 'OpenAI disabled',
         'missing_api_key': 'Missing API key',
         'auth_error': 'OpenAI auth error',
@@ -454,6 +456,8 @@ def _build_messages(candidate: Dict[str, Any]) -> list[Dict[str, Any]]:
         'Produce a concise tactical execution plan, not a generic summary. '
         'Do not write hidden chain-of-thought; decide from the supplied fields and output JSON immediately. '
         'Evaluate structure, trigger quality, liquidity, stop placement, and whether the move is better handled as a pullback limit order or an aggressive market chase. '
+        'Use numeric evidence first: trend alignment, entry quality, RR, liquidity/spread, volatility, portfolio exposure, and invalidation distance. '
+        'Approve only when the setup remains tradable after those checks; otherwise return should_trade=false with a specific skip reason. '
         'Be aggressive but not reckless: when the setup is genuinely strong, do not become timid; when the setup is messy, explicitly stand down. '
         'Assume the bot will execute with the exchange maximum leverage for this symbol. '
         'Your job is to decide whether the setup is worth trading now, whether entry should be market or limit, '
@@ -967,6 +971,7 @@ def build_dashboard_payload(state: Dict[str, Any], config: Dict[str, Any], *, ap
         'output_tokens': int(state.get('output_tokens', 0) or 0),
         'cached_input_tokens': int(state.get('cached_input_tokens', 0) or 0),
         'top_k_per_scan': int(config.get('top_k_per_scan', 5) or 5),
+        'sends_per_scan': int(config.get('sends_per_scan', 1) or 1),
         'cooldown_minutes': int(config.get('cooldown_minutes', 180) or 180),
         'global_min_interval_minutes': int(config.get('global_min_interval_minutes', 15) or 15),
         'min_score_abs': float(config.get('min_score_abs', 38.0) or 38.0),
