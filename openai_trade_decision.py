@@ -77,6 +77,7 @@ def _new_state(now_ts: float | None = None) -> Dict[str, Any]:
         'output_tokens': 0,
         'cached_input_tokens': 0,
         'last_consulted_ts': 0.0,
+        'last_top_candidates_signature': '',
         'symbols': {},
         'recent_decisions': [],
         'last_error': '',
@@ -247,6 +248,15 @@ def _append_recent(state: Dict[str, Any], item: Dict[str, Any], limit: int = 14)
     rows = list(state.get('recent_decisions') or [])
     rows.insert(0, dict(item or {}))
     state['recent_decisions'] = rows[:max(int(limit), 1)]
+
+
+def _top_candidates_signature(candidate: Dict[str, Any]) -> str:
+    items = []
+    for row in list(candidate.get('top_candidates') or [])[:3]:
+        sym = str((row or {}).get('symbol') or '').strip()
+        if sym:
+            items.append(sym)
+    return '|'.join(items)
 
 
 def _build_recent_item(candidate: Dict[str, Any], *, status: str, action: str = '', detail: str = '', decision: Dict[str, Any] | None = None, model: str = '') -> Dict[str, Any]:
@@ -512,6 +522,7 @@ def consult_trade_decision(
     last_hash = str(symbol_state.get('last_payload_hash') or '')
     last_sent_ts = float(symbol_state.get('last_sent_ts', 0) or 0)
     cached_decision = dict(symbol_state.get('last_decision') or {})
+    top_signature = _top_candidates_signature(candidate)
 
     if last_sent_ts > 0 and (now_ts - last_sent_ts) < cooldown_sec:
         next_allowed_ts = last_sent_ts + cooldown_sec
@@ -530,7 +541,8 @@ def consult_trade_decision(
         return state, result
 
     last_consulted_ts = float(state.get('last_consulted_ts', 0) or 0)
-    if global_interval_sec > 0 and last_consulted_ts > 0 and (now_ts - last_consulted_ts) < global_interval_sec:
+    top_changed = bool(top_signature) and top_signature != str(state.get('last_top_candidates_signature') or '')
+    if global_interval_sec > 0 and last_consulted_ts > 0 and (now_ts - last_consulted_ts) < global_interval_sec and not top_changed:
         next_allowed_ts = last_consulted_ts + global_interval_sec
         detail = 'Global OpenAI interval is active until {}.'.format(datetime.fromtimestamp(next_allowed_ts).strftime('%Y-%m-%d %H:%M:%S'))
         result = {
@@ -606,6 +618,7 @@ def consult_trade_decision(
         state['output_tokens'] = int(state.get('output_tokens', 0) or 0) + output_tokens
         state['cached_input_tokens'] = int(state.get('cached_input_tokens', 0) or 0) + cached_input_tokens
         state['last_consulted_ts'] = now_ts
+        state['last_top_candidates_signature'] = top_signature
         state['spent_estimated_usd'] = round(float(state.get('spent_estimated_usd', 0.0) or 0.0) + est_cost_usd, 6)
         state['spent_estimated_twd'] = round(float(state.get('spent_estimated_twd', 0.0) or 0.0) + est_cost_twd, 4)
         state['last_error'] = ''
