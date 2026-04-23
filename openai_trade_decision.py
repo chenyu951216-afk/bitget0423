@@ -37,7 +37,9 @@ def default_trade_config(env_getter: Callable[[str, str], str]) -> Dict[str, Any
     hard_ratio = min(max(_env_float(env_getter, 'OPENAI_TRADE_HARD_BUDGET_RATIO', 0.95), soft_ratio), 1.0)
     return {
         'enabled': _env_bool(env_getter, 'OPENAI_TRADE_ENABLE', True),
-        'model': str(env_getter('OPENAI_TRADE_MODEL', 'gpt-5.4-mini') or 'gpt-5.4-mini').strip(),
+        'model': str(env_getter('OPENAI_TRADE_MODEL', 'gpt-5.4') or 'gpt-5.4').strip(),
+        'upgrade_model': str(env_getter('OPENAI_TRADE_UPGRADE_MODEL', 'gpt-5.4') or 'gpt-5.4').strip(),
+        'fallback_model': str(env_getter('OPENAI_TRADE_FALLBACK_MODEL', 'gpt-5.4-mini') or 'gpt-5.4-mini').strip(),
         'monthly_budget_twd': monthly_budget_twd,
         'soft_budget_twd': round(monthly_budget_twd * soft_ratio, 2),
         'hard_budget_twd': round(monthly_budget_twd * hard_ratio, 2),
@@ -53,11 +55,12 @@ def default_trade_config(env_getter: Callable[[str, str], str]) -> Dict[str, Any
         'max_margin_pct': min(max(_env_float(env_getter, 'OPENAI_TRADE_MAX_MARGIN_PCT', 0.08), 0.01), 0.8),
         'min_leverage': max(_env_int(env_getter, 'OPENAI_TRADE_MIN_LEVERAGE', 4), 1),
         'max_leverage': max(_env_int(env_getter, 'OPENAI_TRADE_MAX_LEVERAGE', 25), 1),
-        'max_output_tokens': max(_env_int(env_getter, 'OPENAI_TRADE_MAX_OUTPUT_TOKENS', 1400), 200),
-        'request_timeout_sec': max(_env_float(env_getter, 'OPENAI_TRADE_TIMEOUT_SEC', 35.0), 5.0),
+        'max_output_tokens': max(_env_int(env_getter, 'OPENAI_TRADE_MAX_OUTPUT_TOKENS', 4096), 800),
+        'request_timeout_sec': max(_env_float(env_getter, 'OPENAI_TRADE_TIMEOUT_SEC', 60.0), 5.0),
         'temperature': 0.2,
         'base_url': str(env_getter('OPENAI_RESPONSES_URL', 'https://api.openai.com/v1/responses') or 'https://api.openai.com/v1/responses').strip(),
-        'reasoning_effort': str(env_getter('OPENAI_TRADE_REASONING_EFFORT', 'high') or 'high').strip(),
+        'reasoning_effort': str(env_getter('OPENAI_TRADE_REASONING_EFFORT', 'medium') or 'medium').strip(),
+        'retry_reasoning_effort': str(env_getter('OPENAI_TRADE_RETRY_REASONING_EFFORT', 'low') or 'low').strip(),
     }
 
 
@@ -336,6 +339,18 @@ def _parse_json_text(text: str) -> Dict[str, Any]:
     return {}
 
 
+def _response_usage(body: Dict[str, Any]) -> Dict[str, Any]:
+    return dict((body or {}).get('usage') or {})
+
+
+def _response_output_tokens(body: Dict[str, Any]) -> int:
+    usage = _response_usage(body)
+    try:
+        return int(usage.get('output_tokens', 0) or 0)
+    except Exception:
+        return 0
+
+
 def _json_schema() -> Dict[str, Any]:
     properties = {
         'should_trade': {'type': 'boolean'},
@@ -426,13 +441,21 @@ def _build_messages(candidate: Dict[str, Any]) -> list[Dict[str, Any]]:
     ]
 
 
-def _build_request_body(candidate: Dict[str, Any], config: Dict[str, Any], *, structured: bool = True) -> Dict[str, Any]:
+def _build_request_body(
+    candidate: Dict[str, Any],
+    config: Dict[str, Any],
+    *,
+    structured: bool = True,
+    model: str | None = None,
+    reasoning_effort: str | None = None,
+    max_output_tokens: int | None = None,
+) -> Dict[str, Any]:
     body = {
-        'model': str(config.get('model') or 'gpt-5.4-mini'),
+        'model': str(model or config.get('model') or 'gpt-5.4'),
         'input': _build_messages(candidate),
-        'max_output_tokens': int(config.get('max_output_tokens', 1400) or 1400),
+        'max_output_tokens': int(max_output_tokens or config.get('max_output_tokens', 4096) or 4096),
     }
-    effort = str(config.get('reasoning_effort') or '').strip()
+    effort = str(reasoning_effort if reasoning_effort is not None else config.get('reasoning_effort') or '').strip()
     if effort:
         body['reasoning'] = {'effort': effort}
     if structured:
@@ -631,28 +654,90 @@ def consult_trade_decision(
         'Authorization': f'Bearer {api_key}',
         'Content-Type': 'application/json',
     }
-    request_body = _build_request_body(candidate, config, structured=True)
     if logger:
         logger('OpenAI trade decision request: {} rank={} score={:.2f}'.format(symbol, rank, score_abs))
 
     try:
         base_url = str(config.get('base_url') or 'https://api.openai.com/v1/responses')
-        timeout_sec = float(config.get('request_timeout_sec', 35.0) or 35.0)
-        resp = requests.post(base_url, headers=headers, json=request_body, timeout=timeout_sec)
-        if resp.status_code == 400:
-            body_text = ''
-            try:
-                body_text = resp.text or ''
-            except Exception:
+        timeout_sec = float(config.get('request_timeout_sec', 60.0) or 60.0)
+        primary_model = str(config.get('model') or 'gpt-5.4').strip()
+        upgrade_model = str(config.get('upgrade_model') or 'gpt-5.4').strip()
+        fallback_model = str(config.get('fallback_model') or '').strip()
+        retry_effort = str(config.get('retry_reasoning_effort') or 'low').strip()
+        max_tokens = int(config.get('max_output_tokens', 4096) or 4096)
+        attempts = [
+            {'model': primary_model, 'structured': True, 'effort': str(config.get('reasoning_effort') or 'medium').strip(), 'max_tokens': max_tokens},
+            {'model': primary_model, 'structured': False, 'effort': retry_effort, 'max_tokens': max(max_tokens, 4096)},
+        ]
+        if upgrade_model and upgrade_model != primary_model:
+            attempts.append({'model': upgrade_model, 'structured': True, 'effort': retry_effort, 'max_tokens': max(max_tokens, 4096)})
+        if fallback_model and fallback_model != primary_model:
+            attempts.append({'model': fallback_model, 'structured': True, 'effort': retry_effort, 'max_tokens': max(max_tokens, 4096)})
+
+        body = {}
+        raw_text = ''
+        raw_json = {}
+        selected_model = primary_model
+        selected_attempt = {}
+        empty_details = []
+        for attempt_index, attempt in enumerate(attempts):
+            selected_attempt = dict(attempt)
+            selected_model = str(attempt.get('model') or primary_model)
+            request_body = _build_request_body(
+                candidate,
+                config,
+                structured=bool(attempt.get('structured', True)),
+                model=selected_model,
+                reasoning_effort=str(attempt.get('effort') or ''),
+                max_output_tokens=int(attempt.get('max_tokens') or max_tokens),
+            )
+            resp = requests.post(base_url, headers=headers, json=request_body, timeout=timeout_sec)
+            if resp.status_code == 400 and bool(attempt.get('structured', True)):
                 body_text = ''
+                try:
+                    body_text = resp.text or ''
+                except Exception:
+                    body_text = ''
+                if logger:
+                    logger('OpenAI structured request 400: {} | {}'.format(symbol, body_text[:260]))
+                request_body = _build_request_body(
+                    candidate,
+                    config,
+                    structured=False,
+                    model=selected_model,
+                    reasoning_effort=retry_effort,
+                    max_output_tokens=max(max_tokens, 4096),
+                )
+                resp = requests.post(base_url, headers=headers, json=request_body, timeout=timeout_sec)
+            if resp.status_code in (403, 404, 429) and attempt_index < len(attempts) - 1:
+                body_text = ''
+                try:
+                    body_text = resp.text or ''
+                except Exception:
+                    body_text = ''
+                if logger:
+                    logger('OpenAI attempt unavailable, retrying next model: {} status={} | {}'.format(
+                        selected_model,
+                        resp.status_code,
+                        body_text[:180],
+                    ))
+                continue
+            resp.raise_for_status()
+            body = resp.json()
+            raw_text = _extract_text(body)
+            raw_json = _parse_json_text(raw_text)
+            if raw_json:
+                break
+            empty_details.append('{} structured={} effort={} output_tokens={}'.format(
+                selected_model,
+                bool(attempt.get('structured', True)),
+                str(attempt.get('effort') or ''),
+                _response_output_tokens(body),
+            ))
             if logger:
-                logger('OpenAI structured request 400: {} | {}'.format(symbol, body_text[:260]))
-            fallback_body = _build_request_body(candidate, config, structured=False)
-            resp = requests.post(base_url, headers=headers, json=fallback_body, timeout=timeout_sec)
-        resp.raise_for_status()
-        body = resp.json()
-        raw_text = _extract_text(body)
-        raw_json = _parse_json_text(raw_text)
+                logger('OpenAI empty/invalid JSON response: {} | {}'.format(symbol, empty_details[-1]))
+        if not raw_json:
+            raise RuntimeError('OpenAI returned no parseable trade JSON after retries: {}'.format(' ; '.join(empty_details)))
         decision = _normalize_decision(raw_json, candidate)
         usage = dict(body.get('usage') or {})
         input_tokens = int(usage.get('input_tokens', 0) or 0)
@@ -664,11 +749,12 @@ def consult_trade_decision(
         symbol_state.update({
             'last_payload_hash': payload_hash,
             'last_sent_ts': now_ts,
-            'last_model': str(config.get('model') or 'gpt-5.4-mini'),
+            'last_model': selected_model,
             'last_decision': dict(decision or {}),
             'last_status': 'consulted',
             'last_response_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'last_cost_twd': round(est_cost_twd, 4),
+            'last_attempt': dict(selected_attempt),
         })
         state.setdefault('symbols', {})[symbol] = symbol_state
         state['api_calls'] = int(state.get('api_calls', 0) or 0) + 1
@@ -689,7 +775,7 @@ def consult_trade_decision(
                 action='trade' if decision.get('should_trade') else 'skip',
                 detail='OpenAI returned a structured trade plan.',
                 decision=decision,
-                model=str(config.get('model') or ''),
+                model=selected_model,
             ),
         )
         save_trade_state(state_path, state)
@@ -702,6 +788,8 @@ def consult_trade_decision(
             'estimated_cost_twd': round(est_cost_twd, 4),
             'estimated_cost_usd': round(est_cost_usd, 6),
             'raw_text': raw_text[:1200],
+            'model': selected_model,
+            'attempt': dict(selected_attempt),
         }
     except Exception as exc:
         err = str(exc)
