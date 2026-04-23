@@ -73,6 +73,7 @@ OPENAI_SHORT_GAINERS_MIN_24H_PCT = max(0.5, float(env_or_blank('OPENAI_SHORT_GAI
 OPENAI_SHORT_GAINERS_MAX_PER_SCAN = max(0, int(float(env_or_blank('OPENAI_SHORT_GAINERS_MAX_PER_SCAN', '1') or 1)))
 OPENAI_TRADE_PENDING_RECHECK_MAX_PER_SCAN = max(1, int(float(env_or_blank('OPENAI_TRADE_PENDING_RECHECK_MAX_PER_SCAN', '2') or 2)))
 OPENAI_PENDING_RECHECK_MIN_GAP_SEC = max(30, int(float(env_or_blank('OPENAI_PENDING_RECHECK_MIN_GAP_SEC', '45') or 45)))
+OPENAI_REVIEW_MAX_ACTIVE_POSITIONS = max(1, int(float(env_or_blank('OPENAI_REVIEW_MAX_ACTIVE_POSITIONS', '15') or 15)))
 ORDER_THRESHOLD         = min(float(DECISION_POLICY.get('order_threshold', 60) or 60), 52.0)   # AI主控版：起始門檻放寬
 ORDER_THRESHOLD_DEFAULT = min(float(DECISION_POLICY.get('order_threshold_default', ORDER_THRESHOLD) or ORDER_THRESHOLD), 52.0)   # AI主控版預設值
 ORDER_THRESHOLD_HIGH    = min(float(DECISION_POLICY.get('order_threshold_high', 80) or 80), 64.0)   # AI主控版：上限放寬但不鎖死
@@ -7703,7 +7704,8 @@ def scan_thread():
                 top10_for_order.append(_row)
                 if len(top10_for_order) >= max(10, 10 + len(short_gainer_review_rows)):
                     break
-            if pos_cnt < MAX_OPEN_POSITIONS:
+            review_position_cap = min(MAX_OPEN_POSITIONS, OPENAI_REVIEW_MAX_ACTIVE_POSITIONS)
+            if pos_cnt < review_position_cap:
                 order_delay = 0
                 openai_sent_this_scan = 0
                 openai_pending_rechecks_this_scan = 0
@@ -8069,6 +8071,9 @@ def scan_thread():
                             daemon=True
                         ).start()
                         order_delay += 5  # 每筆單間隔5秒
+
+            else:
+                print("持倉已達送審暫停門檻 {}，本輪不再送 OpenAI / 不開新倉".format(review_position_cap))
 
             # 更新動態門檻
             update_dynamic_threshold(top10)
