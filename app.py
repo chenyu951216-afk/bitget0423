@@ -95,24 +95,32 @@ STATE_BACKUP_PATH       = "/app/data/state_backup.json"
 RISK_STATE_PATH         = "/app/data/risk_state.json"
 
 SCORE_SMOOTH_ALPHA  = EXECUTION_POLICY['score_smooth_alpha']      # 绌╁畾鍒嗘暩娆婇噸锛堣秺楂樿秺璺熷嵆鏅傦級
-ENTRY_LOCK_SEC      = EXECUTION_POLICY['entry_lock_sec']       # 鍚屼竴骞ｇó 5 鍒嗛悩鍏т笉閲嶈闁嬫柊鍠?POST_CLOSE_COOLDOWN_SEC = 30 * 60                              # 鍚屼竴鍊嬪梗骞冲€夊緦 30 鍒嗛悩鍏т笉閲嶄笅
+ENTRY_LOCK_SEC = EXECUTION_POLICY['entry_lock_sec']
+POST_CLOSE_COOLDOWN_SEC = 30 * 60
 MIN_RR_HARD_FLOOR   = DECISION_POLICY['min_rr_hard_floor']      # 鑷嫊涓嬪柈鏈€浣?RR
-TREND_AI_SEMI_TRADES = DATASET_POLICY['trend_ai_semi_trades']       # 瓒ㄥ嫝瀛哥繏 30 绛嗗緦鍗婁粙鍏?TREND_AI_FULL_TRADES = DATASET_POLICY['trend_ai_full_trades']       # 瓒ㄥ嫝瀛哥繏 50 绛嗗緦鍏ㄤ粙鍏?AI_MIN_SAMPLE_EFFECT = 10       # AI鎴愰暦淇濊鐗堬細鑷冲皯10绛嗗眬閮ㄦǎ鏈墠鍏佽ū褰㈡垚鏈夋晥褰遍熆
+TREND_AI_SEMI_TRADES = DATASET_POLICY['trend_ai_semi_trades']
+TREND_AI_FULL_TRADES = DATASET_POLICY['trend_ai_full_trades']
+AI_MIN_SAMPLE_EFFECT = 10
 SYMBOL_BLOCK_MIN_TRADES = max(int(DATASET_POLICY.get('symbol_block_min_trades', 10) or 10), 18)    # AI涓绘帶鐗堬細寤跺緦骞ｇó灏侀帠鍟熺敤
 SYMBOL_BLOCK_MIN_WINRATE = min(float(DATASET_POLICY.get('symbol_block_min_winrate', 40) or 40), 35.0) # AI涓绘帶鐗堬細鏀惧骞ｇó灏侀帠鍕濈巼
-STRATEGY_CAPITAL_MIN_TRADES = DATASET_POLICY['strategy_capital_min_trades']  # 绛栫暐璩囬噾鏀惧ぇ鑷冲皯瑕?5 绛嗕互涓?STRATEGY_BLOCK_MIN_TRADES = max(int(DATASET_POLICY.get('strategy_block_min_trades', 11) or 11), 20)   # AI涓绘帶鐗堬細寤跺緦绛栫暐灏侀帠鍟熺敤
-STRATEGY_BLOCK_MIN_WINRATE = min(float(DATASET_POLICY.get('strategy_block_min_winrate', 45) or 45), 40.0)# AI涓绘帶鐗堬細鏀惧绛栫暐灏侀帠鍕濈巼
+STRATEGY_CAPITAL_MIN_TRADES = DATASET_POLICY['strategy_capital_min_trades']
+STRATEGY_BLOCK_MIN_TRADES = max(int(DATASET_POLICY.get('strategy_block_min_trades', 11) or 11), 20)
+STRATEGY_BLOCK_MIN_WINRATE = min(float(DATASET_POLICY.get('strategy_block_min_winrate', 45) or 45), 40.0)
 NEUTRAL_REGIME_BLOCK = False      # AI涓绘帶鐗堬細neutral 鍏佽ū浣庡€変綅浜ゆ槗
 DATASET_RESET_TW = "2026-04-05 13:45:00"  # 鍙扮仯鏅傞枔锛岄€欏€嬫檪闁撲箣寰屾墠绠楁柊鐗?AI 涓绘帶璩囨枡
 LEARNING_DATASET_META = build_learning_dataset_meta(reset_from=env_or_blank('TREND_LEARNING_RESET_FROM', DATASET_RESET_TW))
 TREND_LEARNING_RESET_FROM = LEARNING_DATASET_META.get('activated_from', '') or DATASET_RESET_TW
 LEGACY_BOOTSTRAP_MIN_NEW_TRADES = max(int(TREND_AI_FULL_TRADES or 50), 50)
-TREND_EARLY_EXIT_MIN_RUN = 1.20 # 骞冲€夊緦鑻ュ緦绾屽欢绾岃秴閬庢骞呭害锛岃鐐哄彲鑳藉お鏃╁嚭鍫?TREND_EARLY_EXIT_MIN_EDGE = 0.35# 骞冲€夊緦鍏堝洖韪╀笉瓒呴亷閫欏€嬫瘮渚嬶紝鎵嶇畻鍋ュ悍鍥炶俯寰屽欢绾?DECISION_PRIORITY_ORDER = list(DECISION_POLICY['decision_priority_order'])
-SIGNAL_META_CACHE   = {}        # 鏈€杩戜竴娆″垎鏋愬揩鍙栵紙绲﹁拷韫?椹楄瓑鐢級
-SCORE_CACHE         = {}        # 鍒嗘暩骞虫粦蹇彇
-ENTRY_LOCKS         = {}        # 閫插牬閹栵紝閬垮厤 90鈫?0 鍙嶈瑙哥櫦
-POST_CLOSE_LOCKS    = {}        # 骞冲€夊喎鍗婚帠锛屽悓骞ｅ钩鍊夊緦 30 鍒嗛悩鍏т笉閲嶄笅
-PROTECTION_STATE    = {}        # 浜ゆ槗鎵€淇濊鍠璀夌媭鎱?AUTO_ORDER_AUDIT    = {}        # 瑷橀寗姣忚吉鐐轰綍娌掍笅鍠?API_ERROR_STREAK    = 0
+TREND_EARLY_EXIT_MIN_RUN = 1.20
+TREND_EARLY_EXIT_MIN_EDGE = 0.35
+DECISION_PRIORITY_ORDER = list(DECISION_POLICY['decision_priority_order'])
+SIGNAL_META_CACHE = {}
+SCORE_CACHE = {}
+ENTRY_LOCKS = {}
+POST_CLOSE_LOCKS = {}
+PROTECTION_STATE = {}
+AUTO_ORDER_AUDIT = {}
+API_ERROR_STREAK = 0
 PROTECTION_FAIL_STREAK = 0
 AUTO_AI_MODE = 'normal'
 AI_FULL_SCORE_CONTROL = True
@@ -173,7 +181,7 @@ def _cap_market_aux(value, cap=MARKET_AUX_SCORE_CAP):
 
 
 def _ai_effective_rows(closed_only=True):
-    """绲变竴 AI 鎴愰暦闅庢鐨勬湁鏁堝鍠▓绠楋細鍎厛 trusted_live锛屽啀閫€鍥?soft_live / trend_live銆?""
+    # 統一 AI 成長樣本的有效覆蓋率計算。
     try:
         trusted = get_live_trades(closed_only=closed_only, pool='trusted_live')
         if trusted:
@@ -187,9 +195,9 @@ def _ai_effective_rows(closed_only=True):
 
 
 def _ai_growth_control(effective_count=None):
-    """AI 鎴愰暦淇濊妯″紡锛?    <30 绛嗭細鍙閷勪笉褰遍熆浜ゆ槗
-    30~49 绛嗭細灏忓箙褰遍熆
-    50+ 绛嗭細鍏ㄦ瑠鎺ョ
+    """AI growth-control phases.
+
+    <30: learning only; 30~49: semi-control; 50+: full-control.
     """
     if effective_count is None:
         effective_count = len(_ai_effective_rows(closed_only=True))
@@ -208,7 +216,7 @@ def _ai_growth_control(effective_count=None):
             'blend_cap': 0.0,
             'allow_ai_gate': False,
             'allow_profile_block': False,
-            'note': f'AI鎴愰暦淇濊锛氬墠{TREND_AI_SEMI_TRADES}绛嗗彧瑷橀寗涓嶆帴绠?,
+            'note': f'AI 成長保護：前 {TREND_AI_SEMI_TRADES} 筆只觀察不接管',
         }
     if effective_count < TREND_AI_FULL_TRADES:
         return {
@@ -220,7 +228,7 @@ def _ai_growth_control(effective_count=None):
             'blend_cap': 0.35,
             'allow_ai_gate': True,
             'allow_profile_block': True,
-            'note': f'AI鎴愰暦淇濊锛歿TREND_AI_SEMI_TRADES}-{TREND_AI_FULL_TRADES - 1}绛嗗皬骞呮帴绠?,
+            'note': f'AI 成長保護：{TREND_AI_SEMI_TRADES}-{TREND_AI_FULL_TRADES - 1} 筆小幅接管',
         }
     return {
         'phase': 'full',
@@ -231,7 +239,7 @@ def _ai_growth_control(effective_count=None):
         'blend_cap': 1.0,
         'allow_ai_gate': True,
         'allow_profile_block': True,
-        'note': f'AI鎴愰暦淇濊锛歿TREND_AI_FULL_TRADES}+绛嗗叏娆婃帴绠?,
+        'note': f'AI 成長保護：{TREND_AI_FULL_TRADES}+ 筆全面接管',
     }
 
 
@@ -243,7 +251,7 @@ def _execution_quality_state(sig):
 
 
 def _ensure_sqlite_compat_schema():
-    """瑁滈綂 API 鏈冪敤鍒扮殑娆勪綅锛岄伩鍏?schema 钀藉樊璁撴煡瑭㈢洿鎺ョ偢鎺夈€?""
+    """Ensure the SQLite schema has all columns expected by the API."""
     import sqlite3
     table_columns = {
         'learning_trades': {
@@ -335,11 +343,16 @@ RISK_LOCK = threading.Lock()
 
 # 鈹€鈹€ 鍕曟厠闁€妾荤媭鎱?鈹€鈹€
 _DT = {
-    "current":          52,   # AI涓绘帶鐗堣捣濮嬮杸妾?    "last_order_time":  None, # 鏈€杩戜笅鍠檪闁?    "full_rounds":      0,    # 閫ｇ簩婊垮€夎吉鏁?    "empty_rounds":     0,    # 闁€妾?5鏅傞€ｇ簩绌哄€夎吉鏁?    "no_order_rounds":  0,    # 閫ｇ簩鐒′笅鍠吉鏁革紙鏁存暩锛岄伩鍏峃one+1閷锛?}
+    "current": 52,
+    "last_order_time": None,
+    "full_rounds": 0,
+    "empty_rounds": 0,
+    "no_order_rounds": 0,
+}
 _DT_LOCK = threading.Lock()
 
 def _estimate_ai_threshold_target(top_sigs=None):
-    """鐢?AI 瑭曞垎寰岀殑鍊欓伕瑷婅櫉鍝佽唱鑷嫊浼拌▓闁€妾伙紝涓﹀鐢?AI 鎴愰暦淇濊妯″紡銆?""
+    """Estimate the current AI threshold target from top candidate quality."""
     control = _ai_growth_control()
     phase = str(control.get('phase') or 'learning')
     base_default = max(52.0, float(ORDER_THRESHOLD_DEFAULT or 52.0))
@@ -347,7 +360,7 @@ def _estimate_ai_threshold_target(top_sigs=None):
     if not sigs:
         if phase == 'learning':
             return base_default, control.get('note', 'AI鎴愰暦淇濊')
-        return base_default if phase == 'semi' else 50.0, '鐒″€欓伕瑷婅櫉锛岀董鎸佽瀵?
+        return base_default if phase == 'semi' else 50.0, 'No ranked candidates yet; keep default threshold.'
 
     scored = []
     for sig in sigs:
@@ -382,7 +395,7 @@ def _estimate_ai_threshold_target(top_sigs=None):
             continue
 
     if not scored:
-        return base_default, '鍊欓伕瑷婅櫉涓嶈冻锛岀董鎸佽瀵?
+        return base_default, '候選訊號不足，維持觀察'
 
     scored.sort(key=lambda x: x[0], reverse=True)
     best_q = float(scored[0][0])
@@ -411,7 +424,7 @@ def _estimate_ai_threshold_target(top_sigs=None):
     return round(target, 2), note
 
 def update_dynamic_threshold(top_sigs=None):
-    """AI 鑷富闁€妾伙細渚?AI 鍒嗘暩瑕嗚搵鐜囥€佸缈掓ǎ鏈垏鎸佸€夊鍔涘嫊鎱嬭鏁淬€?""
+    """Update the dynamic threshold from AI coverage, samples, and quality."""
     global ORDER_THRESHOLD
     with _DT_LOCK:
         dt = _DT
@@ -472,7 +485,7 @@ def update_dynamic_threshold(top_sigs=None):
         })
 
 def record_order_placed():
-    """涓嬪柈寰屽儏鍋氶潪甯歌紩寰殑閬庣啽鎶戝埗锛屼笉鍐嶆妸闁€妾绘媺鍥炲浐瀹氬崁闁撱€?""
+    """Slightly raise the threshold after an order is placed to avoid overtrading."""
     global ORDER_THRESHOLD
     with _DT_LOCK:
         _DT['last_order_time'] = datetime.now()
@@ -482,7 +495,7 @@ def record_order_placed():
         nudged = round(min(prev + 0.3, 64.0), 2)
         _DT['current'] = max(44.0, min(64.0, nudged))
         ORDER_THRESHOLD = _DT['current']
-        print('鈫╋笍 AI闁€妾诲井瑾胯嚦{}锛堥伩鍏嶇煭鏅傞枔閬庡害閫ｉ枊锛?.format(_DT['current']))
+        print('AI threshold nudged to {} after order placement.'.format(_DT['current']))
         update_state(threshold_info={
             'current': _DT['current'],
             'phase': 'AI绌嶆サ' if _DT['current'] <= 50 else 'AI鍧囪　' if _DT['current'] <= 61 else 'AI淇濆畧',
@@ -493,180 +506,198 @@ def record_order_placed():
         })
 
 # =====================================================
-# 闁嬬洡鏅傛淇濊绯荤当锛堝彴鐏ｆ檪闁?UTC+8锛?# =====================================================
+# Session / time-window protection state (Taipei / UTC+8)
+# =====================================================
 SESSION_STATE = {
-    "eu_score":      0,   # 姝愭床鐩よ瀵熷垎鏁?(-2~+2)
-    "us_score":      0,   # 缇庢床鐩よ瀵熷垎鏁?(-2~+2)
-    "eu_score_date": "",  # 姝愮洡鍒嗘暩鐨勫彴鐏ｆ棩鏈?(YYYY-MM-DD)
-    "us_score_date": "",  # 缇庣洡鍒嗘暩鐨勫彴鐏ｆ棩鏈?    "eu_score_time": "",  # 姝愮洡鍒嗘暩鐨勫彴鐏ｆ檪闁?(HH:MM)
-    "us_score_time": "",  # 缇庣洡鍒嗘暩鐨勫彴鐏ｆ檪闁?    "europe_obs":    [],  # 瑙€瀵熸湡闁撶殑鍍规牸瑷橀寗
-    "america_obs":   [],  # 瑙€瀵熸湡闁撶殑鍍规牸瑷橀寗
+    "eu_score": 0,
+    "us_score": 0,
+    "eu_score_date": "",
+    "us_score_date": "",
+    "eu_score_time": "",
+    "us_score_time": "",
+    "europe_obs": [],
+    "america_obs": [],
     "session_phase": "normal",
-    "session_note":  "",
+    "session_note": "",
 }
 SESSION_LOCK = threading.Lock()
 
 def get_tw_time():
-    """鍙栧緱鍙扮仯鏅傞枔锛圲TC+8锛?""
+    """Return the current Taipei time (UTC+8)."""
     from datetime import timezone, timedelta
     tz_tw = timezone(timedelta(hours=8))
     return datetime.now(tz_tw)
 
 def tw_now_str(fmt="%H:%M:%S"):
-    """鍙扮仯鏅傞枔鏍煎紡鍖栧瓧涓?""
+    """Format the current Taipei time as a string."""
     return get_tw_time().strftime(fmt)
 
 def tw_today():
-    """鍙扮仯鏅傞枔浠婂ぉ鏃ユ湡"""
+    """Return the current Taipei date string."""
     return get_tw_time().strftime("%Y-%m-%d")
 
 def get_session_status():
-    """
-    鍥炲偝鐣跺墠鏅傛鐙€鎱嬶細
-    - normal: 姝ｅ父浜ゆ槗
-    - eu_pause: 姝愮洡闁嬬洡鍓?0鍒嗛悩锛屽仠姝笅鏂板柈
-    - eu_closed: 19:50-20:32 瀹屽叏鍋滄+骞冲€?    - eu_watch: 20:32鍓嶈瀵熸瓙鐩よ蛋鍕?    - us_pause: 缇庣洡闁嬬洡鍓?0鍒嗛悩锛屽仠姝笅鏂板柈
-    - us_closed: 21:50-22:32 瀹屽叏鍋滄+骞冲€?    - us_watch: 22:32鍓嶈瀵熺編鐩よ蛋鍕?    """
-    # 鏅傛淇濊宸插畬鍏ㄥ仠鐢紝鍥哄畾鍥炲偝姝ｅ父鐙€鎱嬨€?    return "normal", ""
+    """Return the current session status and note for EU/US market windows."""
     tw = get_tw_time()
-    h = tw.hour
-    m = tw.minute
-    t = h * 60 + m  # 杞夋彌鎴愬垎閻?
-    EU_PAUSE_START  = 19 * 60 + 30   # 19:30
-    EU_CLOSE_START  = 19 * 60 + 50   # 19:50
-    EU_WATCH_END    = 20 * 60 + 32   # 20:32
-    EU_RESUME       = 20 * 60 + 35   # 20:35
+    t = tw.hour * 60 + tw.minute
 
-    US_PAUSE_START  = 21 * 60 + 30   # 21:30
-    US_CLOSE_START  = 21 * 60 + 50   # 21:50
-    US_WATCH_END    = 22 * 60 + 32   # 22:32
-    US_RESUME       = 22 * 60 + 35   # 22:35
+    EU_PAUSE_START = 19 * 60 + 30
+    EU_CLOSE_START = 19 * 60 + 50
+    EU_WATCH_END = 20 * 60 + 32
+    EU_RESUME = 20 * 60 + 35
+
+    US_PAUSE_START = 21 * 60 + 30
+    US_CLOSE_START = 21 * 60 + 50
+    US_WATCH_END = 22 * 60 + 32
+    US_RESUME = 22 * 60 + 35
 
     if EU_CLOSE_START <= t < EU_WATCH_END:
-        return "eu_closed", "姝愮洡闁嬬洡瑙€瀵熸湡 (19:50-20:32)"
-    elif EU_PAUSE_START <= t < EU_CLOSE_START:
-        return "eu_pause", "姝愮洡闁嬬洡鍓嶆毇鍋滀笅鍠?(19:30-19:50)"
-    elif EU_WATCH_END <= t < EU_RESUME:
-        return "eu_watch_end", "姝愮洡瑙€瀵熺祼鏉燂紝瑷堢畻鍒嗘暩涓?
-    elif US_CLOSE_START <= t < US_WATCH_END:
-        return "us_closed", "缇庣洡闁嬬洡瑙€瀵熸湡 (21:50-22:32)"
-    elif US_PAUSE_START <= t < US_CLOSE_START:
-        return "us_pause", "缇庣洡闁嬬洡鍓嶆毇鍋滀笅鍠?(21:30-21:50)"
-    elif US_WATCH_END <= t < US_RESUME:
-        return "us_watch_end", "缇庣洡瑙€瀵熺祼鏉燂紝瑷堢畻鍒嗘暩涓?
+        return "eu_closed", "歐洲時段觀察期 (19:50-20:32)"
+    if EU_PAUSE_START <= t < EU_CLOSE_START:
+        return "eu_pause", "歐洲時段前暫停新倉 (19:30-19:50)"
+    if EU_WATCH_END <= t < EU_RESUME:
+        return "eu_watch_end", "歐洲觀察期結束，等待恢復"
+    if US_CLOSE_START <= t < US_WATCH_END:
+        return "us_closed", "美洲時段觀察期 (21:50-22:32)"
+    if US_PAUSE_START <= t < US_CLOSE_START:
+        return "us_pause", "美洲時段前暫停新倉 (21:30-21:50)"
+    if US_WATCH_END <= t < US_RESUME:
+        return "us_watch_end", "美洲觀察期結束，等待恢復"
     return "normal", ""
 
 def observe_session_market(session="eu"):
-    """
-    瑙€瀵熼枊鐩よ蛋鍕紝瑷堢畻椤嶅瑭曞垎 (-2 ~ +2)
-    閭忚集锛氱湅 BTC 鍦ㄨ瀵熸湡闁撶殑婕茶穼骞?    """
-    # 鏅傛淇濊宸插仠鐢紝涓嶅啀鍋氫换浣曡瀵熴€佽鍒嗘垨 UI 鏇存柊銆?    return
+    """Observe BTC during protected windows and derive a short session score."""
     try:
         ticker = exchange.fetch_ticker("BTC/USDT:USDT")
-        price  = float(ticker['last'])
-        pct    = float(ticker.get('percentage', 0) or 0)
-
+        price = float(ticker['last'])
         with SESSION_LOCK:
             obs_key_map = {"eu": "europe_obs", "us": "america_obs", "europe": "europe_obs", "america": "america_obs"}
             score_key_map = {"eu": "eu_score", "us": "us_score", "europe": "eu_score", "america": "us_score"}
             date_key_map = {"eu": "eu_score_date", "us": "us_score_date", "europe": "eu_score_date", "america": "us_score_date"}
             time_key_map = {"eu": "eu_score_time", "us": "us_score_time", "europe": "eu_score_time", "america": "us_score_time"}
-            key = obs_key_map.get(session, "{}_obs".format(session))
+            key = obs_key_map.get(session, f"{session}_obs")
             SESSION_STATE.setdefault(key, [])
             SESSION_STATE[key].append(price)
-            # 鍙繚鐣欐渶杩?0绛?            if len(SESSION_STATE[key]) > 20:
+            if len(SESSION_STATE[key]) > 20:
                 SESSION_STATE[key] = SESSION_STATE[key][-20:]
 
             prices = SESSION_STATE[key]
             if len(prices) < 2:
                 return
 
-            # 瑷堢畻瑙€瀵熸湡闁撴疾璺?            first_price = prices[0]
-            last_price  = prices[-1]
-            change_pct  = (last_price - first_price) / first_price * 100
+            first_price = prices[0]
+            last_price = prices[-1]
+            change_pct = (last_price - first_price) / max(first_price, 1e-12) * 100.0
 
-            # 瑭曞垎閭忚集
             if change_pct > 1.5:
-                score = 2; note = "{}鐩ゅ挤鍕笂婕瞷:.1f}% +2鍒?.format(
-                    "姝愭床" if session=="eu" else "缇庢床", change_pct)
+                score, note = 2, f"{'歐洲' if session == 'eu' else '美洲'}時段強漲 {change_pct:.1f}% (+2)"
             elif change_pct > 0.5:
-                score = 1; note = "{}鐩ゅ皬骞呬笂婕瞷:.1f}% +1鍒?.format(
-                    "姝愭床" if session=="eu" else "缇庢床", change_pct)
+                score, note = 1, f"{'歐洲' if session == 'eu' else '美洲'}時段偏強 {change_pct:.1f}% (+1)"
             elif change_pct < -1.5:
-                score = -2; note = "{}鐩ゅ挤鍕笅璺寋:.1f}% -2鍒?.format(
-                    "姝愭床" if session=="eu" else "缇庢床", abs(change_pct))
+                score, note = -2, f"{'歐洲' if session == 'eu' else '美洲'}時段強跌 {abs(change_pct):.1f}% (-2)"
             elif change_pct < -0.5:
-                score = -1; note = "{}鐩ゅ皬骞呬笅璺寋:.1f}% -1鍒?.format(
-                    "姝愭床" if session=="eu" else "缇庢床", abs(change_pct))
+                score, note = -1, f"{'歐洲' if session == 'eu' else '美洲'}時段偏弱 {abs(change_pct):.1f}% (-1)"
             else:
-                score = 0; note = "{}鐩ゆ┇鐩?0鍒?.format(
-                    "姝愭床" if session=="eu" else "缇庢床")
+                score, note = 0, f"{'歐洲' if session == 'eu' else '美洲'}時段震盪 (0)"
 
-            score_key = score_key_map.get(session, "{}_score".format(session))
-            date_key  = date_key_map.get(session, "{}_score_date".format(session))
-            time_key  = time_key_map.get(session, "{}_score_time".format(session))
+            score_key = score_key_map.get(session, f"{session}_score")
+            date_key = date_key_map.get(session, f"{session}_score_date")
+            time_key = time_key_map.get(session, f"{session}_score_time")
             SESSION_STATE[score_key] = score
-            SESSION_STATE[date_key]  = tw_today()        # 瑷橀寗鍙扮仯鏃ユ湡
-            SESSION_STATE[time_key]  = tw_now_str("%H:%M")  # 瑷橀寗鍙扮仯鏅傞枔
+            SESSION_STATE[date_key] = tw_today()
+            SESSION_STATE[time_key] = tw_now_str("%H:%M")
             SESSION_STATE["session_note"] = note
-            print("馃搳 {}鐩よ瀵? {} | BTC {:.2f}% | 鍒嗘暩鏈夋晥鑷虫槑鏃?榛?.format(
-                "姝愭床" if session=="eu" else "缇庢床", note, change_pct))
 
-            # 鍚屾鍒?STATE 绲?UI 椤ず
             update_state(session_info={
-                "phase":    SESSION_STATE["session_phase"],
-                "note":     note,
+                "phase": SESSION_STATE["session_phase"],
+                "note": note,
                 "eu_score": SESSION_STATE["eu_score"],
                 "us_score": SESSION_STATE["us_score"],
-                "eu_time":  SESSION_STATE.get("eu_score_time",""),
-                "us_time":  SESSION_STATE.get("us_score_time",""),
+                "eu_time": SESSION_STATE.get("eu_score_time", ""),
+                "us_time": SESSION_STATE.get("us_score_time", ""),
             })
     except Exception as e:
-        print("瑙€瀵熷競鍫村け鏁? {}".format(e))
+        print(f"Session market observation failed: {e}")
 
 def get_session_score():
-    """鏅傛淇濊宸插仠鐢紝涓嶅啀褰遍熆浜ゆ槗鍒嗘暩銆?""
-    return 0
+    with SESSION_LOCK:
+        now_tw = get_tw_time()
+        today = tw_today()
+        if now_tw.hour >= 2:
+            for sess in ["eu", "us"]:
+                score_date = SESSION_STATE.get(f"{sess}_score_date", "")
+                if score_date and score_date < today:
+                    SESSION_STATE[f"{sess}_score"] = 0
+                    SESSION_STATE[f"{sess}_score_date"] = ""
+                    SESSION_STATE[f"{sess}_score_time"] = ""
+        return int(SESSION_STATE.get("eu_score", 0) or 0) + int(SESSION_STATE.get("us_score", 0) or 0)
 
 def session_monitor_thread():
-    """鏅傛淇濊宸插仠鐢ㄣ€?""
+    """Background monitor for session protection windows."""
+    prev_status = None
     while True:
-        time.sleep(600)
+        try:
+            status, note = get_session_status()
+            with SESSION_LOCK:
+                SESSION_STATE["session_phase"] = status
+                if note:
+                    SESSION_STATE["session_note"] = note
 
+            if status == "eu_closed":
+                observe_session_market("eu")
+            elif status == "us_closed":
+                observe_session_market("us")
+
+            if status != prev_status:
+                update_state(session_info={
+                    "phase": status,
+                    "note": SESSION_STATE.get("session_note", note),
+                    "eu_score": SESSION_STATE.get("eu_score", 0),
+                    "us_score": SESSION_STATE.get("us_score", 0),
+                    "eu_time": SESSION_STATE.get("eu_score_time", ""),
+                    "us_time": SESSION_STATE.get("us_score_time", ""),
+                })
+                prev_status = status
+        except Exception as e:
+            print(f"Session monitor error: {e}")
+        time.sleep(120)
 # =====================================================
-# 澶х洡璧板嫝鍒嗘瀽绯荤当锛圔TC 鏃ョ窔 + 姝峰彶鍨嬫厠灏嶆瘮锛?# =====================================================
+# =====================================================
+# Market trend state (BTC daily + historical pattern matching)
 MARKET_STATE = {
-    "pattern":      "鍒濆鍖栦腑",
-    "direction":    "涓€?,
-    "score":        0,
-    "strength":     0.0,
-    "detail":       "",
-    "history_match": "",   # 姝峰彶鐩镐技鍨嬫厠
-    "prediction":   "",    # 闋愭脯璧板嫝
-    "last_update":  "",
-    "btc_price":    0.0,
-    "btc_change":   0.0,
-    "long_term_pos": None, # 闀锋湡鍊変綅鐙€鎱?}
-MARKET_LOCK = threading.Lock()
-
+    "pattern": "初始化中",
+    "direction": "中性",
+    "score": 0,
+    "strength": 0.0,
+    "detail": "",
+    "history_match": "",
+    "prediction": "",
+    "last_update": "",
+    "btc_price": 0.0,
+    "btc_change": 0.0,
+    "long_term_pos": None,
+}
 def find_similar_history(df, current_window=30, top_n=3):
-    """
-    鍦?BTC 姝峰彶鏃ョ窔涓壘鏈€鐩镐技鐨凨绶氬瀷鎱?    鐢ㄦ婧栧寲寰岀殑鏀剁洡鍍瑰簭鍒楀仛鐩镐技搴︽瘮灏嶏紙姝愬咕閲屽緱璺濋洟锛?    """
+    # 在 BTC 歷史資料中尋找最相似的 K 線型態
     try:
         closes = df['c'].values.astype(float)
         n = len(closes)
         if n < current_window + 30:
             return []
 
-        # 鍙栨渶杩?current_window 鏍筀妫掍綔鐐虹暥鍓嶅瀷鎱?        current = closes[-(current_window):]
-        # 妯欐簴鍖栵紙0-1 绡勫湇锛?        c_min, c_max = current.min(), current.max()
+        # 取最近 current_window 根 K 棒作為當前型態
+        current = closes[-(current_window):]
+        # 標準化到 0-1 區間
+        c_min, c_max = current.min(), current.max()
         if c_max == c_min:
             return []
         current_norm = (current - c_min) / (c_max - c_min)
 
         similarities = []
-        # 寰炴鍙蹭腑婊戝嫊姣斿皪锛堣嚦灏戜繚鐣?00鏍瑰緦绾孠妫掔敤渚嗙湅绲愭灉锛?        search_end = n - current_window - 30
-        for i in range(0, search_end - current_window, 5):  # 姣?鏍硅烦涓€鏍?            window = closes[i:i+current_window]
+        # 在歷史資料中滑動比對，至少保留 30 根未來 K 棒觀察結果
+        search_end = n - current_window - 30
+        for i in range(0, search_end - current_window, 5):  # 每 5 根取一個比對窗口
+            window = closes[i:i+current_window]
             w_min, w_max = window.min(), window.max()
             if w_max == w_min:
                 continue
@@ -680,7 +711,8 @@ def find_similar_history(df, current_window=30, top_n=3):
                 future = closes[i+current_window:i+current_window+30]
                 if len(future) >= 10:
                     future_ret = (future[-1] - future[0]) / future[0] * 100
-                    # 鍙栧緱鏃ユ湡锛堢敤绱㈠紩鍙嶆帹锛?                    similarities.append({
+                    # 取得歷史窗口位置（以索引回推）
+                    similarities.append({
                         'idx': i,
                         'similarity': round(similarity * 100, 1),
                         'future_ret': round(future_ret, 1),
@@ -695,201 +727,149 @@ def find_similar_history(df, current_window=30, top_n=3):
         return []
 
 def analyze_btc_market_trend():
-    """
-    鍒嗘瀽 BTC 鏃ョ窔璧板嫝锛岃瓨鍒ョ暥鍓嶅瀷鎱嬩甫灏嶆瘮姝峰彶
-    鍥炲偝瑭崇窗鍒嗘瀽绲愭灉
-    """
+    # 分析 BTC 日線大方向，提供大盤偏多/偏空/中性的背景參考。
     try:
+        ohlcv = exchange.fetch_ohlcv("BTC/USDT:USDT", "1d", limit=1000)
+        df = pd.DataFrame(ohlcv, columns=['t', 'o', 'h', 'l', 'c', 'v'])
+        if len(df) < 120:
+            return None
 
-        # 鎶?BTC 鏃ョ窔 - 鎶撴渶澶?00鏍瑰仛姝峰彶姣斿皪锛堢磩1.5骞达級
-        ohlcv = exchange.fetch_ohlcv("BTC/USDT:USDT", "1d", limit=1000)  # 鐩￠噺澶氭姄
-        df = pd.DataFrame(ohlcv, columns=['t','o','h','l','c','v'])
-
-        # 鍧囩窔
-        df['ma7']  = df['c'].rolling(7).mean()
+        df['ma7'] = df['c'].rolling(7).mean()
         df['ma25'] = df['c'].rolling(25).mean()
         df['ma50'] = df['c'].rolling(50).mean()
-        df['ma99'] = df['c'].rolling(min(99,len(df))).mean()
+        df['ma99'] = df['c'].rolling(min(99, len(df))).mean()
 
-        curr  = float(df['c'].iloc[-1])
-        ma7   = float(df['ma7'].iloc[-1])
-        ma25  = float(df['ma25'].iloc[-1])
-        ma50  = float(df['ma50'].iloc[-1])
-        ma99  = float(df['ma99'].iloc[-1])
-        prev  = float(df['c'].iloc[-2])
-        change_pct = (curr - prev) / prev * 100
+        curr = float(df['c'].iloc[-1])
+        prev = float(df['c'].iloc[-2])
+        ma7 = float(df['ma7'].iloc[-1])
+        ma25 = float(df['ma25'].iloc[-1])
+        ma50 = float(df['ma50'].iloc[-1])
+        ma99 = float(df['ma99'].iloc[-1])
+        change_pct = (curr - prev) / max(prev, 1e-9) * 100
 
-        # 杩戞湡楂樹綆榛?        high_30 = float(df['h'].tail(30).max())
-        low_30  = float(df['l'].tail(30).min())
-        high_7  = float(df['h'].tail(7).max())
-        low_7   = float(df['l'].tail(7).min())
-        range_30 = high_30 - low_30
-
-        # ATR
+        high_30 = float(df['h'].tail(30).max())
+        low_30 = float(df['l'].tail(30).min())
         atr_s = ta.atr(df['h'], df['l'], df['c'], length=14)
-        atr   = float(atr_s.iloc[-1]) if not pd.isna(atr_s.iloc[-1]) else curr*0.02
+        atr = float(atr_s.iloc[-1]) if not pd.isna(atr_s.iloc[-1]) else curr * 0.02
 
-        # 瓒ㄥ嫝鏂滅巼锛堢窔鎬у洖姝革級
-        c7  = df['c'].tail(7).values
-        c14 = df['c'].tail(14).values
-        c30 = df['c'].tail(30).values
-        x7  = np.arange(len(c7));  slope_7  = np.polyfit(x7,  c7,  1)[0]/curr*100
-        x14 = np.arange(len(c14)); slope_14 = np.polyfit(x14, c14, 1)[0]/curr*100
-        x30 = np.arange(len(c30)); slope_30 = np.polyfit(x30, c30, 1)[0]/curr*100
+        def _slope(vals):
+            x = np.arange(len(vals))
+            return float(np.polyfit(x, vals, 1)[0]) / max(curr, 1e-9) * 100
 
-        # 鎴愪氦閲忚定鍕?        vol_7  = float(df['v'].tail(7).mean())
+        slope_7 = _slope(df['c'].tail(7).values)
+        slope_14 = _slope(df['c'].tail(14).values)
+        slope_30 = _slope(df['c'].tail(30).values)
+
+        vol_7 = float(df['v'].tail(7).mean())
         vol_30 = float(df['v'].tail(30).mean())
         vol_ratio = vol_7 / max(vol_30, 1)
 
-        # 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
-        # 鍨嬫厠璀樺垾
-        # 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
-        pattern = ""; direction = "涓€?; score = 0; strength = 0.5
-        detail = ""; history_match = ""; prediction = ""
+        pattern = "盤整"
+        direction = "neutral"
+        score = 0
+        strength = 0.5
+        detail = "BTC 大盤暫時沒有非常明確的日線偏向。"
+        history_match = "近期結構以當前均線排列與斜率為主。"
+        prediction = "等待更清楚的延續或轉弱訊號。"
 
-        # 1. 鍧囩窔瀹屽叏澶氶牠鎺掑垪
         if curr > ma7 > ma25 > ma50 > ma99:
-            pattern = "鍧囩窔瀹屽叏澶氶牠鎺掑垪"
-            direction = "寮峰"
-            score = 5; strength = 0.9
-            detail = "BTC 鏃ョ窔4姊濆潎绶氬畬鍏ㄥ闋帓鍒楋紝澶х洡铏曟柤寮峰嫝鐗涘競绲愭"
-            history_match = "姝峰彶灏嶆瘮锛?020骞?0鏈堛€?021骞?鏈堛€?024骞?鏈堝嚭鐝剧浉鍚岀祼妲?
-            prediction = "鐭湡锛氱董鎸佸闋紝鍥炶璨峰叆 | 涓湡锛氳嫢閲忛厤鍚堝彲鍓垫柊楂?| 寤鸿锛氬仛澶氱偤涓?
-
-        # 2. 鍧囩窔瀹屽叏绌洪牠鎺掑垪
+            pattern = "均線多頭排列"
+            direction = "強多"
+            score = 5
+            strength = 0.9
+            detail = "BTC 日線均線呈現完整多頭排列，偏向強勢上升趨勢。"
+            prediction = "短線以回踩承接為主，避免在過度延伸處追價。"
         elif curr < ma7 < ma25 < ma50 < ma99:
-            pattern = "鍧囩窔瀹屽叏绌洪牠鎺掑垪"
-            direction = "寮风┖"
-            score = -5; strength = 0.9
-            detail = "BTC 鏃ョ窔4姊濆潎绶氬畬鍏ㄧ┖闋帓鍒楋紝澶х洡铏曟柤寮卞嫝鐔婂競绲愭"
-            history_match = "姝峰彶灏嶆瘮锛?018骞翠笅鍗婂勾銆?022骞?-11鏈堝嚭鐝剧浉鍚岀祼妲?
-            prediction = "鐭湡锛氬弽褰堝仛绌猴紝涓嶅疁杩藉 | 涓湡锛氬簳閮ㄤ笉鏄庤鎱?| 寤鸿锛氬仛绌哄弽褰堝毚鎺ф悕"
+            pattern = "均線空頭排列"
+            direction = "強空"
+            score = -5
+            strength = 0.9
+            detail = "BTC 日線均線呈現完整空頭排列，偏向弱勢下跌趨勢。"
+            prediction = "短線以反彈承壓看空為主，避免低位追空。"
+        elif curr >= high_30 * 0.995 and slope_7 > 0.15:
+            pattern = "逼近 30 日高點"
+            direction = "多"
+            score = 3
+            strength = 0.75
+            detail = "BTC 正在挑戰近 30 日高點，趨勢仍偏多，但需觀察能否有效站穩。"
+            prediction = "若突破後量能延續，可維持偏多；若放量沖高回落則轉保守。"
+        elif curr <= low_30 * 1.005 and slope_7 < -0.15:
+            pattern = "逼近 30 日低點"
+            direction = "空"
+            score = -3
+            strength = 0.75
+            detail = "BTC 正在測試近 30 日低點，趨勢仍偏空，但需觀察是否跌破續弱。"
+            prediction = "若跌破後弱反彈無力，可維持偏空；若快速收回則先降槓桿觀察。"
+        elif slope_14 > 0.05:
+            pattern = "弱多趨勢"
+            direction = "多"
+            score = 2
+            strength = 0.6
+            detail = "BTC 中期斜率偏上，但還不是非常強的單邊多頭。"
+            prediction = "優先做多強勢回踩，不追高。"
+        elif slope_14 < -0.05:
+            pattern = "弱空趨勢"
+            direction = "空"
+            score = -2
+            strength = 0.6
+            detail = "BTC 中期斜率偏下，但還不是非常強的單邊空頭。"
+            prediction = "優先做空弱勢反彈，不追空。"
 
-        # 3. 绐佺牬杩戞湡楂橀粸锛堢墰甯傜獊鐮达級
-        elif curr > high_30 * 0.99 and slope_7 > 0.3:
-            pattern = "绐佺牬杩戞湡30鏃ラ珮榛?
-            direction = "澶?
-            score = 4; strength = 0.8
-            detail = "BTC 姝ｇ獊鐮磋繎30鏃ラ珮榛?{:.0f}锛岀獊鐮村瀷鎱嬬湅澶?.format(high_30)
-            history_match = "姝峰彶灏嶆瘮锛氱獊鐮村瀷鎱嬪緦绾屼笂婕叉鐜囩磩65-70%"
-            prediction = "鐭湡锛氬闋嫊鑳藉挤锛岃瀵熻兘鍚︾珯绌╅珮榛?| 寤鸿锛氬仛澶氾紝姝㈡悕楂橀粸涓嬫柟ATR脳1.5"
-
-        # 4. 璺岀牬杩戞湡浣庨粸锛堢唺甯傝穼鐮达級
-        elif curr < low_30 * 1.01 and slope_7 < -0.3:
-            pattern = "璺岀牬杩戞湡30鏃ヤ綆榛?
-            direction = "绌?
-            score = -4; strength = 0.8
-            detail = "BTC 璺岀牬杩?0鏃ヤ綆榛?{:.0f}锛岃穼鐮村瀷鎱嬬湅绌?.format(low_30)
-            history_match = "姝峰彶灏嶆瘮锛氳穼鐮翠綆榛炲緦绾屼笅璺屾鐜囩磩60-65%"
-            prediction = "鐭湡锛氱┖闋嫊鑳藉挤锛岄伩鍏嶆妱搴?| 寤鸿锛氳紩鍊夊仛绌烘垨瑙€鏈?
-
-        # 5. 鍧囩窔绯剧簭锛堢洡鏁达級
-        elif abs(curr - ma25) / curr < 0.02 and abs(slope_14) < 0.15:
-            pattern = "鍧囩窔绯剧簭鐩ゆ暣"
-            direction = "涓€?
-            score = 0; strength = 0.3
-            detail = "BTC 鍧囩窔绯剧簭锛屽競鍫存柟鍚戜笉鏄庯紝铏曟柤鐩ゆ暣闅庢"
-            history_match = "姝峰彶灏嶆瘮锛氱洡鏁村緦绐佺牬鏂瑰悜姹哄畾涓嬩竴娉㈣定鍕?
-            prediction = "绛夊緟鏂瑰悜閬告搰锛岀獊鐮村仛澶?璺岀牬鍋氱┖ | 寤鸿锛氶檷浣庡€変綅绛夊緟绐佺牬"
-
-        # 6. 澶氶牠鍥炶锛堜富鍗囨氮涓洖瑾匡級
-        elif curr > ma50 and curr < ma25 and slope_30 > 0.2:
-            pattern = "澶氶牠涓诲崌娴腑鍥炶"
-            direction = "澶?
-            score = 3; strength = 0.7
-            detail = "BTC 鍦ㄩ暦鏈熶笂鍗囪定鍕腑鍥炶鑷矼A25闄勮繎锛屽仴搴峰洖瑾?
-            history_match = "姝峰彶灏嶆瘮锛氫富鍗囨氮鍥炶閫氬父鏄卜鍏ユ鏈冿紙鍥炶骞呭害10-20%锛?
-            prediction = "鍥炶绲愭潫淇¤櫉锛氭棩绶氭敹寰㎝A25 | 寤鸿锛氬垎鎵瑰仛澶氾紝姝㈡悕MA50涓嬫柟"
-
-        # 7. 姝昏矒褰堬紙鐔婂競涓弽褰堬級
-        elif curr < ma50 and slope_7 > 0.5 and slope_30 < -0.1:
-            pattern = "鐔婂競涓璨撳綀鍙嶅綀"
-            direction = "绌?
-            score = -3; strength = 0.7
-            detail = "BTC 鍦ㄩ暦鏈熶笅闄嶈定鍕腑鍑虹従鍙嶅綀锛屽皬蹇冩璨撳綀"
-            history_match = "姝峰彶灏嶆瘮锛氱唺甯傚弽褰堥€氬父鍦∕A50涓嬫柟澶姌"
-            prediction = "鍙嶅綀鐩锛歁A25-MA50涔嬮枔 | 寤鸿锛氬弽褰堝仛绌猴紝涓嶈拷楂?
-
-        # 8. 鎴愪氦閲忚悗绺┇鐩?        elif abs(slope_7) < 0.1 and vol_ratio < 0.7:
-            pattern = "绺噺姗洡"
-            direction = "涓€?
-            score = 0; strength = 0.2
-            detail = "BTC 鎴愪氦閲忚悗绺€佸児鏍兼┇鐩わ紝甯傚牬瑙€鏈涙儏绶掓績鍘?
-            history_match = "姝峰彶灏嶆瘮锛氱府閲忔┇鐩ゅ緦閫氬父鏈変竴娉㈣純澶ц鎯?
-            prediction = "钃勫嫝寰呯櫦鏂瑰悜鏈畾 | 寤鸿锛氱瓑寰呮斁閲忕獊鐮村緦璺熼€?
-
-        # 闋愯ō锛氬急澶?寮辩┖
-        else:
-            if slope_14 > 0:
-                pattern = "寮卞瓒ㄥ嫝"
-                direction = "澶?
-                score = 2; strength = 0.4
-                detail = "BTC 鏃ョ窔鏂滅巼鍚戜笂锛屽急澶氭牸灞€"
-                prediction = "瓒ㄥ嫝鍋忓浣嗗姏閬撲笉寮凤紝璎规厧鍋氬"
-            else:
-                pattern = "寮辩┖瓒ㄥ嫝"
-                direction = "绌?
-                score = -2; strength = 0.4
-                detail = "BTC 鏃ョ窔鏂滅巼鍚戜笅锛屽急绌烘牸灞€"
-                prediction = "瓒ㄥ嫝鍋忕┖浣嗗姏閬撲笉寮凤紝璎规厧鎿嶄綔"
-
-        # 鐪熷姝峰彶鐩镐技搴︽瘮灏?        similar_cases = find_similar_history(df, current_window=20, top_n=3)
+        similar_cases = find_similar_history(df, current_window=20, top_n=3)
         if similar_cases:
-            hist_lines = []
-            bull_count = sum(1 for s in similar_cases if s['future_ret'] > 2)
-            bear_count = sum(1 for s in similar_cases if s['future_ret'] < -2)
-            for s in similar_cases:
-                trend = "馃搱+{:.1f}%".format(s['future_ret']) if s['future_ret'] > 0 else "馃搲{:.1f}%".format(s['future_ret'])
-                hist_lines.append("鐩镐技搴}% 鈫?寰岀簩30鏃}".format(s['similarity'], trend))
-            hist_conclusion = "姝峰彶{}娆＄浉浼煎瀷鎱嬶細{}鐪嬪 / {}鐪嬬┖".format(
-                len(similar_cases), bull_count, bear_count)
-            history_match = hist_conclusion + " | " + " | ".join(hist_lines)
-        else:
-            # 鏁告摎涓嶈冻鏅傜敤鍨嬫厠鏂囧瓧鎻忚堪
-            history_match = history_match or "鐩镐技搴︿笉瓒筹紙杩戞湡璧板嫝杓冪壒娈婏紝鐒￠珮搴︾浉浼兼鍙诧級"
+            bull_count = sum(1 for s in similar_cases if float(s.get('future_ret', 0) or 0) > 2)
+            bear_count = sum(1 for s in similar_cases if float(s.get('future_ret', 0) or 0) < -2)
+            history_match = "歷史相似型態 {} 筆：偏多 {} / 偏空 {}".format(len(similar_cases), bull_count, bear_count)
 
         return {
-            "pattern": pattern,
-            "direction": direction,
-            "score": score,
-            "strength": strength,
-            "detail": detail,
-            "history_match": history_match,
-            "prediction": prediction,
-            "btc_price": round(curr, 2),
-            "btc_change": round(change_pct, 2),
-            "ma7": round(ma7, 2),
-            "ma25": round(ma25, 2),
-            "ma50": round(ma50, 2),
-            "slope_7": round(slope_7, 3),
-            "slope_30": round(slope_30, 3),
-            "vol_ratio": round(vol_ratio, 2),
-            "last_update": tw_now_str(),
+            'pattern': pattern,
+            'direction': direction,
+            'score': score,
+            'strength': strength,
+            'detail': detail,
+            'history_match': history_match,
+            'prediction': prediction,
+            'btc_price': round(curr, 2),
+            'btc_change': round(change_pct, 2),
+            'ma7': round(ma7, 2),
+            'ma25': round(ma25, 2),
+            'ma50': round(ma50, 2),
+            'ma99': round(ma99, 2),
+            'atr': round(atr, 2),
+            'slope_7': round(slope_7, 3),
+            'slope_14': round(slope_14, 3),
+            'slope_30': round(slope_30, 3),
+            'vol_ratio': round(vol_ratio, 2),
+            'last_update': tw_now_str(),
         }
     except Exception as e:
-        print("澶х洡鍒嗘瀽澶辨晽: {}".format(e))
+        print("BTC 大盤分析失敗: {}".format(e))
         return None
 
+
 def market_analysis_thread():
-    """姣忓皬鏅傛洿鏂颁竴娆″ぇ鐩ゅ垎鏋?""
-    print("澶х洡鍒嗘瀽鍩疯绶掑暉鍕?)
-    time.sleep(20)  # 绛夋巸鎻忓煼琛岀窉鍏堝暉鍕?    while True:
+    # 定時更新 BTC 大盤背景資訊。
+    print("BTC 大盤分析背景執行緒啟動")
+    time.sleep(20)
+    while True:
         try:
             result = analyze_btc_market_trend()
             if result:
                 with MARKET_LOCK:
                     MARKET_STATE.update(result)
                 update_state(market_info=result)
-                print("馃搳 澶х洡鍒嗘瀽: {} | {} | BTC {:.0f} ({:+.1f}%)".format(
-                    result["pattern"], result["direction"],
-                    result["btc_price"], result["btc_change"]))
-                # 澶х洡鍒嗘瀽鑸囬暦鏈熷€変綅鍒ゆ柗鍒嗛洟锛岄渶缍撴柟鍚戠⒑瑾嶅緦鎵嶆渻鍒囨彌
+                print("大盤分析: {} | {} | BTC {:.0f} ({:+.1f}%)".format(
+                    result['pattern'], result['direction'], result['btc_price'], result['btc_change']
+                ))
                 check_long_term_position()
         except Exception as e:
-            print("澶х洡鍒嗘瀽鍩疯绶掗尟瑾? {}".format(e))
-        time.sleep(3600)  # 姣忓皬鏅傛洿鏂?
+            print("大盤分析背景執行緒錯誤: {}".format(e))
+        time.sleep(3600)
 # =====================================================
 # 闀锋湡鍊変綅绯荤当锛堢崹绔嬫柤鐭窔7鍊嬪€変綅涔嬪锛?# =====================================================
+# =====================================================
+# 長期倉位系統（獨立於短線倉位之外）
+# =====================================================
 LT_STATE = {
     "position": None,   # None / "long" / "short"
     "entry_price": 0.0,
@@ -897,49 +877,51 @@ LT_STATE = {
     "symbol": "BTC/USDT:USDT",
     "contracts": 0.0,
     "unrealized_pnl": 0.0,
-    "leverage": 5,      # 闀锋湡鍊変綅鐢ㄤ綆妲撴】
+    "leverage": 5,
     "note": "",
 }
 LT_LOCK = threading.Lock()
 
 # =====================================================
-# FVG 闄愬児鎺涘柈杩借工绯荤当
+# FVG 限價掛單追蹤系統
 # =====================================================
 FVG_ORDERS = {}   # { symbol: { order_id, side, price, score, sl, tp, placed_time, support, resist } }
-FVG_LOCK   = threading.Lock()
+FVG_LOCK = threading.Lock()
+
 
 def register_fvg_order(symbol, order_id, side, price, score, sl, tp, support, resist, extra_meta=None):
-    """鐧昏涓€绛?FVG 闄愬児鎺涘柈"""
+    # 登記一筆 FVG 掛單監控。
     with FVG_LOCK:
         if symbol in FVG_ORDERS:
-            print("鈿狅笍 FVG闃查噸瑜囷細{} 宸叉湁鎺涘柈锛岃烦閬?.format(symbol))
+            print("FVG 防重複：{} 已有掛單，跳過".format(symbol))
             return False
         FVG_ORDERS[symbol] = {
-            "order_id":    order_id,
-            "side":        side,
-            "price":       price,
-            "score":       score,
-            "sl":          sl,
-            "tp":          tp,
-            "support":     support,
-            "resist":      resist,
+            "order_id": order_id,
+            "side": side,
+            "price": price,
+            "score": score,
+            "sl": sl,
+            "tp": tp,
+            "support": support,
+            "resist": resist,
             "placed_time": tw_now_str("%H:%M:%S"),
-            "created_ts":  time.time(),
-            "curr_price":   price,
-            "curr_score":   score,
-            "status":      "鎺涘柈涓?,
+            "created_ts": time.time(),
+            "curr_price": price,
+            "curr_score": score,
+            "status": "掛單中",
         }
         if isinstance(extra_meta, dict):
             for key, value in extra_meta.items():
-                if key in ('signal_payload', 'pending_fill_meta'):
+                if key in ("signal_payload", "pending_fill_meta"):
                     continue
                 FVG_ORDERS[symbol][key] = value
-        print("馃搶 FVG鎺涘柈鐧昏: {} {} @{:.6f}".format(symbol, side, price))
+        print("FVG 掛單登記: {} {} @{:.6f}".format(symbol, side, price))
         update_state(fvg_orders=dict(FVG_ORDERS))
         return True
 
+
 def cancel_fvg_order(symbol, reason=""):
-    """鍙栨秷涓︾櫥鍑轰竴绛?FVG 鎺涘柈"""
+    # 取消並移除一筆 FVG 掛單。
     with FVG_LOCK:
         if symbol not in FVG_ORDERS:
             return
@@ -948,19 +930,15 @@ def cancel_fvg_order(symbol, reason=""):
         PENDING_LIMIT_META.pop(symbol, None)
     try:
         exchange.cancel_order(order["order_id"], symbol)
-        print("馃棏 FVG鎺涘柈鍙栨秷: {} | 鍘熷洜: {}".format(symbol, reason))
+        print("FVG 掛單取消: {} | 原因: {}".format(symbol, reason))
     except Exception as e:
-        print("FVG鍙栨秷澶辨晽(鍙兘宸叉垚浜?: {}".format(e))
+        print("FVG 取消失敗(可能已成交): {}".format(e))
     update_state(fvg_orders=dict(FVG_ORDERS))
 
+
 def fvg_order_monitor_thread():
-    """
-    FVG 闄愬児鎺涘柈杩借工鍩疯绶掞紙姣?0绉掓鏌ヤ竴娆★級
-    - 鎺涘柈鐙€鎱嬨€乼icker 鍥哄畾妾㈡煡
-    - analyze(symbol) 鍙湪鍍规牸鎺ヨ繎澶辨晥鍗€鎴栧揩鍙栭亷鏈熸檪閲嶈窇
-    - 鎺涘柈瓒呴亷4灏忔檪鏈垚浜?鈫?鍙栨秷
-    """
-    print("FVG鎺涘柈杩借工鍩疯绶掑暉鍕?)
+    # FVG 掛單追蹤背景執行緒。每 30 秒檢查一次，必要時取消失效掛單。
+    print("FVG 掛單追蹤背景執行緒啟動")
     while True:
         try:
             with FVG_LOCK:
@@ -974,165 +952,174 @@ def fvg_order_monitor_thread():
                     with FVG_MONITOR_LOCK:
                         cache = FVG_MONITOR_CACHE.setdefault(symbol, {})
                     now_ts = time.time()
-                    status = str(cache.get('order_status') or 'unknown')
-                    if now_ts - float(cache.get('order_status_ts', 0) or 0) >= 20:
+                    status = str(cache.get("order_status") or "unknown")
+                    if now_ts - float(cache.get("order_status_ts", 0) or 0) >= 20:
                         try:
-                            od = exchange.fetch_order(order['order_id'], symbol)
-                            status = od.get('status', '')
+                            od = exchange.fetch_order(order["order_id"], symbol)
+                            status = od.get("status", "")
                             with FVG_MONITOR_LOCK:
-                                cache['order_status'] = status
-                                cache['order_status_ts'] = now_ts
+                                cache["order_status"] = status
+                                cache["order_status_ts"] = now_ts
                         except Exception:
                             pass
-                    if status in ('closed', 'filled'):
+                    if status in ("closed", "filled"):
                         with FVG_LOCK:
                             FVG_ORDERS.pop(symbol, None)
                         pending_meta = None
                         with PENDING_LIMIT_LOCK:
                             pending_meta = dict(PENDING_LIMIT_META.pop(symbol, None) or {})
-                        print("鉁?FVG鎺涘柈鎴愪氦: {} @{}".format(symbol, order['price']))
+                        print("FVG 掛單成交: {} @{}".format(symbol, order["price"]))
                         if pending_meta:
                             try:
-                                pending_sig = dict(pending_meta.get('signal') or {})
-                                pending_sig['price'] = float(order.get('price', pending_sig.get('price', 0)) or pending_sig.get('price', 0))
-                                pending_sig['decision_source'] = pending_sig.get('decision_source', 'openai')
+                                pending_sig = dict(pending_meta.get("signal") or {})
+                                pending_sig["price"] = float(order.get("price", pending_sig.get("price", 0)) or pending_sig.get("price", 0))
+                                pending_sig["decision_source"] = pending_sig.get("decision_source", "openai")
                                 finalize_open_position_entry(
                                     symbol,
-                                    'buy' if str(order.get('side') or '').lower() == 'long' else 'sell',
+                                    "buy" if str(order.get("side") or "").lower() == "long" else "sell",
                                     pending_sig,
-                                    float(pending_meta.get('qty', 0) or 0),
-                                    float(order.get('sl', pending_sig.get('stop_loss', 0)) or pending_sig.get('stop_loss', 0)),
-                                    float(order.get('tp', pending_sig.get('take_profit', 0)) or pending_sig.get('take_profit', 0)),
-                                    float(pending_meta.get('leverage', 1) or 1),
-                                    float(pending_meta.get('order_usdt', 0) or 0),
-                                    float(pending_meta.get('risk_usdt', 0) or 0),
-                                    float(pending_meta.get('margin_pct', pending_sig.get('margin_pct', 0)) or pending_sig.get('margin_pct', 0)),
-                                    dict(pending_meta.get('margin_ctx') or {}),
+                                    float(pending_meta.get("qty", 0) or 0),
+                                    float(order.get("sl", pending_sig.get("stop_loss", 0)) or pending_sig.get("stop_loss", 0)),
+                                    float(order.get("tp", pending_sig.get("take_profit", 0)) or pending_sig.get("take_profit", 0)),
+                                    float(pending_meta.get("leverage", 1) or 1),
+                                    float(pending_meta.get("order_usdt", 0) or 0),
+                                    float(pending_meta.get("risk_usdt", 0) or 0),
+                                    float(pending_meta.get("margin_pct", pending_sig.get("margin_pct", 0)) or pending_sig.get("margin_pct", 0)),
+                                    dict(pending_meta.get("margin_ctx") or {}),
                                     protect=True,
                                 )
                             except Exception as fill_err:
-                                print("鎺涘柈鎴愪氦寰岃寤哄€夌媭鎱嬪け鏁?{}: {}".format(symbol, fill_err))
+                                print("掛單成交後建立持倉失敗 {}: {}".format(symbol, fill_err))
                         update_state(fvg_orders=dict(FVG_ORDERS))
                         continue
-                    if status == 'canceled':
+                    if status == "canceled":
                         with FVG_LOCK:
                             FVG_ORDERS.pop(symbol, None)
                         with PENDING_LIMIT_LOCK:
                             PENDING_LIMIT_META.pop(symbol, None)
                         update_state(fvg_orders=dict(FVG_ORDERS))
                         continue
+
                     ticker = exchange.fetch_ticker(symbol)
-                    curr = float(ticker['last'])
-                    support = float(order.get('support', 0) or 0)
-                    resist = float(order.get('resist', 0) or 0)
+                    curr = float(ticker["last"])
+                    support = float(order.get("support", 0) or 0)
+                    resist = float(order.get("resist", 0) or 0)
                     near_boundary = False
-                    if order['side'] == 'long' and support > 0:
+                    if order["side"] == "long" and support > 0:
                         near_boundary = curr <= support * 1.003
-                    elif order['side'] == 'short' and resist > 0:
+                    elif order["side"] == "short" and resist > 0:
                         near_boundary = curr >= resist * 0.997
-                    sc = float(order.get('score', 0) or 0)
-                    if near_boundary or (now_ts - float(cache.get('analysis_ts', 0) or 0) >= 180):
+
+                    sc = float(order.get("score", 0) or 0)
+                    if near_boundary or (now_ts - float(cache.get("analysis_ts", 0) or 0) >= 180):
                         sc = extract_analysis_score(analyze(symbol))
                         with FVG_MONITOR_LOCK:
-                            cache['analysis_score'] = sc
-                            cache['analysis_ts'] = now_ts
+                            cache["analysis_score"] = sc
+                            cache["analysis_ts"] = now_ts
                     else:
-                        sc = float(cache.get('analysis_score', sc) or sc)
+                        sc = float(cache.get("analysis_score", sc) or sc)
+
                     cancel_reason = None
-                    ai_limit_cancel_price = float(order.get('limit_cancel_price', 0) or 0)
-                    ai_limit_cancel_condition = str(order.get('limit_cancel_condition') or '')
-                    ai_limit_cancel_note = str(order.get('limit_cancel_note') or '')
-                    ai_limit_cancel_timeframe = str(order.get('limit_cancel_timeframe') or '')
+                    ai_limit_cancel_price = float(order.get("limit_cancel_price", 0) or 0)
+                    ai_limit_cancel_condition = str(order.get("limit_cancel_condition") or "")
+                    ai_limit_cancel_note = str(order.get("limit_cancel_note") or "")
+                    ai_limit_cancel_timeframe = str(order.get("limit_cancel_timeframe") or "")
                     if ai_limit_cancel_price > 0:
-                        if order['side'] == 'long' and curr <= ai_limit_cancel_price:
-                            cancel_reason = 'OpenAI鍙栨秷鎺涘柈 {:.6f} [{}] {}'.format(
+                        if order["side"] == "long" and curr <= ai_limit_cancel_price:
+                            cancel_reason = "OpenAI 取消掛單 {:.6f} [{}] {}".format(
                                 ai_limit_cancel_price,
-                                ai_limit_cancel_timeframe or 'price',
-                                ai_limit_cancel_note or ai_limit_cancel_condition or '鍋氬鎺涘柈澶辨晥锛屽彇娑?,
+                                ai_limit_cancel_timeframe or "price",
+                                ai_limit_cancel_note or ai_limit_cancel_condition or "做多掛單失效，取消",
                             )
-                        elif order['side'] == 'short' and curr >= ai_limit_cancel_price:
-                            cancel_reason = 'OpenAI鍙栨秷鎺涘柈 {:.6f} [{}] {}'.format(
+                        elif order["side"] == "short" and curr >= ai_limit_cancel_price:
+                            cancel_reason = "OpenAI 取消掛單 {:.6f} [{}] {}".format(
                                 ai_limit_cancel_price,
-                                ai_limit_cancel_timeframe or 'price',
-                                ai_limit_cancel_note or ai_limit_cancel_condition or '鍋氱┖鎺涘柈澶辨晥锛屽彇娑?,
+                                ai_limit_cancel_timeframe or "price",
+                                ai_limit_cancel_note or ai_limit_cancel_condition or "做空掛單失效，取消",
                             )
-                    if order['side'] == 'long' and sc < max(18, float(ORDER_THRESHOLD) * 0.55):
-                        cancel_reason = '鍋氬鍒嗘暩涓嶈冻{}锛?30锛夛紝鍙栨秷鎺涘柈'.format(round(sc, 1))
-                    elif order['side'] == 'short' and sc > -max(18, float(ORDER_THRESHOLD) * 0.55):
-                        cancel_reason = '鍋氱┖鍒嗘暩涓嶈冻{}锛?-30锛夛紝鍙栨秷鎺涘柈'.format(round(sc, 1))
-                    elif order['side'] == 'long' and support > 0 and curr < support * 0.998:
-                        cancel_reason = '璺岀牬鏀拹{:.4f}锛屽彇娑堝仛澶氭帥鍠?.format(support)
-                    elif order['side'] == 'short' and resist > 0 and curr > resist * 1.002:
-                        cancel_reason = '绐佺牬澹撳姏{:.4f}锛屽彇娑堝仛绌烘帥鍠?.format(resist)
-                    created_ts = float(order.get('created_ts', now_ts) or now_ts)
+
+                    threshold_floor = max(18.0, float(ORDER_THRESHOLD) * 0.55)
+                    if order["side"] == "long" and sc < threshold_floor:
+                        cancel_reason = "做多分數不足 {}(<{:.1f})，取消掛單".format(round(sc, 1), threshold_floor)
+                    elif order["side"] == "short" and sc > -threshold_floor:
+                        cancel_reason = "做空分數不足 {}(>{:.1f})，取消掛單".format(round(sc, 1), -threshold_floor)
+                    elif order["side"] == "long" and support > 0 and curr < support * 0.998:
+                        cancel_reason = "跌破支撐 {:.4f}，取消做多掛單".format(support)
+                    elif order["side"] == "short" and resist > 0 and curr > resist * 1.002:
+                        cancel_reason = "突破壓力 {:.4f}，取消做空掛單".format(resist)
+
+                    created_ts = float(order.get("created_ts", now_ts) or now_ts)
                     if not cancel_reason and (now_ts - created_ts) > 240 * 60:
-                        cancel_reason = '鎺涘柈瓒呴亷4灏忔檪锛岃嚜鍕曞彇娑?
+                        cancel_reason = "掛單超過 4 小時未成交，自動取消"
+
                     if cancel_reason:
                         cancel_fvg_order(symbol, cancel_reason)
                     else:
                         with FVG_LOCK:
                             if symbol in FVG_ORDERS:
-                                FVG_ORDERS[symbol]['curr_price'] = round(curr, 6)
-                                FVG_ORDERS[symbol]['curr_score'] = round(sc, 1)
-                                FVG_ORDERS[symbol]['status'] = '鎺涘柈涓?| 鐝惧児{:.4f} | 鍒嗘暩{}'.format(curr, round(sc,1))
+                                FVG_ORDERS[symbol]["curr_price"] = round(curr, 6)
+                                FVG_ORDERS[symbol]["curr_score"] = round(sc, 1)
+                                FVG_ORDERS[symbol]["status"] = "掛單中 | 現價{:.4f} | 分數{}".format(curr, round(sc, 1))
                         update_state(fvg_orders=dict(FVG_ORDERS))
                 except Exception as e:
-                    print('FVG杩借工{}閷: {}'.format(symbol, e))
+                    print("FVG 追蹤 {} 失敗: {}".format(symbol, e))
         except Exception as e:
-            print('FVG杩借工鍩疯绶掗尟瑾? {}'.format(e))
+            print("FVG 追蹤背景執行緒錯誤: {}".format(e))
         time.sleep(30)
 
+
 def open_long_term_position(direction, reason=""):
-    """闁嬮暦鏈熷€変綅锛圔TC锛屼綆妲撴】5x锛?%璩囩敘锛?""
+    # 開啟長期倉位（BTC，低槓桿）。
     try:
         with LT_LOCK:
             if LT_STATE["position"] is not None:
-                print("闀锋湡鍊変綅宸插瓨鍦紝璺抽亷")
+                print("長期倉位已存在，跳過")
                 return False
 
         ticker = exchange.fetch_ticker("BTC/USDT:USDT")
-        price  = float(ticker['last'])
+        price = float(ticker["last"])
         with STATE_LOCK:
             equity = STATE.get("equity", 100)
-        usdt   = equity * 0.05          # 鐢?%璩囩敘
-        lev    = LT_STATE["leverage"]
+        usdt = equity * 0.05
+        lev = LT_STATE["leverage"]
 
-        # 瑷畾妲撴】
         try:
             exchange.set_leverage(lev, "BTC/USDT:USDT")
-        except:
+        except Exception:
             pass
 
         contracts = round(usdt * lev / price, 4)
         side = "buy" if direction == "long" else "sell"
 
-        order = exchange.create_order(
+        exchange.create_order(
             "BTC/USDT:USDT", "market", side, contracts,
             params={"tdMode": "cross"}
         )
 
         with LT_LOCK:
-            LT_STATE["position"]    = direction
+            LT_STATE["position"] = direction
             LT_STATE["entry_price"] = price
-            LT_STATE["entry_time"]  = tw_now_str("%Y-%m-%d %H:%M")
-            LT_STATE["contracts"]   = contracts
-            LT_STATE["note"]        = reason
+            LT_STATE["entry_time"] = tw_now_str("%Y-%m-%d %H:%M")
+            LT_STATE["contracts"] = contracts
+            LT_STATE["note"] = reason
 
-        print("鉁?闀锋湡{}鍊夐枊鍊?BTC {:.2f} | {}寮?| 鍘熷洜:{}".format(
-            "澶? if direction=="long" else "绌?,
-            price, contracts, reason))
+        print("長期{}倉進場 BTC {:.2f} | {} 張 | 原因:{}".format(
+            "多" if direction == "long" else "空",
+            price, contracts, reason,
+        ))
         return True
     except Exception as e:
-        print("闀锋湡鍊変綅闁嬪€夊け鏁? {}".format(e))
+        print("長期倉位開倉失敗 {}".format(e))
         return False
 
+
 def close_long_term_position(reason=""):
-    """骞抽暦鏈熷€変綅"""
+    # 平掉長期倉位。
     try:
         with LT_LOCK:
             if LT_STATE["position"] is None:
                 return False
-            side      = LT_STATE["position"]
+            side = LT_STATE["position"]
             contracts = LT_STATE["contracts"]
 
         close_side = "sell" if side == "long" else "buy"
@@ -1143,76 +1130,74 @@ def close_long_term_position(reason=""):
 
         with LT_LOCK:
             entry = LT_STATE["entry_price"]
-            LT_STATE["position"]  = None
+            LT_STATE["position"] = None
             LT_STATE["contracts"] = 0.0
 
         ticker = exchange.fetch_ticker("BTC/USDT:USDT")
-        curr   = float(ticker['last'])
-        pnl    = (curr - entry) / entry * 100 if side=="long" else (entry - curr) / entry * 100
-        print("馃摛 闀锋湡鍊変綅骞冲€?| 鎼嶇泭:{:+.2f}% | 鍘熷洜:{}".format(pnl, reason))
+        curr = float(ticker["last"])
+        pnl = (curr - entry) / entry * 100 if side == "long" else (entry - curr) / entry * 100
+        print("長期倉位平倉 | 損益:{:+.2f}% | 原因:{}".format(pnl, reason))
         return True
     except Exception as e:
-        print("闀锋湡鍊変綅骞冲€夊け鏁? {}".format(e))
+        print("長期倉位平倉失敗 {}".format(e))
         return False
 
+
 def check_long_term_position():
-    """姣忓皬鏅傜敱澶х洡鍒嗘瀽鍩疯绶掑懠鍙紝鏍规摎澶х洡鏂瑰悜绠＄悊闀锋湡鍊変綅銆傞渶閫ｇ簩 2 娆″悓鏂瑰悜鎵嶅嫊浣滐紝闄嶄綆鑰﹀悎銆?""
+    # 由大盤分析背景執行緒呼叫，根據大盤方向管理長期倉位。
     with MARKET_LOCK:
-        direction = MARKET_STATE.get("direction", "涓€?)
+        direction = MARKET_STATE.get("direction", "neutral")
         strength = MARKET_STATE.get("strength", 0)
         pattern = MARKET_STATE.get("pattern", "")
         prediction = MARKET_STATE.get("prediction", "")
     with LT_LOCK:
         curr_pos = LT_STATE["position"]
-    if strength < 0.6:
-        print("鈴?澶х洡寮峰害涓嶈冻({:.1f})锛岄暦鏈熷€変綅缍寔鐝剧媭".format(strength))
-        return
-    confirmed, confirm_count = MARKET_DIRECTION_GUARD.register(direction)
-    if direction in ("寮峰", "澶?, "寮风┖", "绌?) and not confirmed:
-        print("鈴?澶х洡鏂瑰悜 {} 绗?{} 娆＄⒑瑾嶏紝闀锋湡鍊変綅鏆笉鍒囨彌".format(direction, confirm_count))
-        return
-    if direction in ("寮峰", "澶?) and curr_pos != "long":
-        if curr_pos == "short":
-            close_long_term_position("鏂瑰悜杞夊锛屽钩绌哄€?)
-        open_long_term_position("long", "{} | {}".format(pattern, prediction[:30]))
-    elif direction in ("寮风┖", "绌?) and curr_pos != "short":
-        if curr_pos == "long":
-            close_long_term_position("鏂瑰悜杞夌┖锛屽钩澶氬€?)
-        open_long_term_position("short", "{} | {}".format(pattern, prediction[:30]))
-    elif direction == "涓€? and curr_pos is not None:
-        close_long_term_position("澶х洡涓€э紝瑙€鏈?)
 
+    if strength < 0.6:
+        print("大盤強度不足({:.1f})，長期倉位維持現狀".format(strength))
+        return
+
+    confirmed, confirm_count = MARKET_DIRECTION_GUARD.register(direction)
+    if direction in ("強多", "多", "強空", "空") and not confirmed:
+        print("大盤方向 {} 第 {} 次確認，長期倉位暫不切換".format(direction, confirm_count))
+        return
+
+    if direction in ("強多", "多") and curr_pos != "long":
+        if curr_pos == "short":
+            close_long_term_position("方向轉多，平空倉")
+        open_long_term_position("long", "{} | {}".format(pattern, prediction[:30]))
+    elif direction in ("強空", "空") and curr_pos != "short":
+        if curr_pos == "long":
+            close_long_term_position("方向轉空，平多倉")
+        open_long_term_position("short", "{} | {}".format(pattern, prediction[:30]))
+    elif direction == "neutral" and curr_pos is not None:
+        close_long_term_position("大盤中性，退出長期倉位")
 def check_risk_ok():
-    """鍥炲偝 (鍙惁涓嬪柈, 鍘熷洜)锛堜笉鐢ㄩ帠锛岄伩鍏嶆閹栵級"""
+    """Return whether trading is currently allowed by the local risk state."""
     try:
-        rs = RISK_STATE  # 鐩存帴璁€
+        rs = RISK_STATE
         today = tw_today()
 
-        # 鏂扮殑涓€澶╅噸缃棩铏ф悕
         if rs["today_date"] != today:
-            rs["today_date"]         = today
-            rs["daily_loss_usdt"]    = 0.0
+            rs["today_date"] = today
+            rs["daily_loss_usdt"] = 0.0
             rs["daily_start_equity"] = STATE.get("equity", 0)
-            rs["trading_halted"]     = False
-            rs["halt_reason"]        = ""
-            rs["cooldown_until"]     = None
-            rs["consecutive_loss"]   = 0
-            print("鏂扮殑涓€澶╋紝閲嶇疆棰ㄦ帶鐙€鎱?)
-
-        if '绺借硣鐢㈣櫑鎼嶅凡閬? in str(rs.get("halt_reason", "") or ''):
             rs["trading_halted"] = False
             rs["halt_reason"] = ""
+            rs["cooldown_until"] = None
+            rs["consecutive_loss"] = 0
+            print("新的一天，已重置本地風控狀態")
 
-        # 鍍呬繚鐣欎汉宸?绯荤当绱氬仠鍠紝渚嬪淇濊鍠己澶憋紱绉婚櫎鏃ユ悕鑸囬€ｈ櫑鍋滃柈銆?        if rs["trading_halted"]:
-            return False, rs["halt_reason"]
+        if rs.get("trading_halted"):
+            return False, str(rs.get("halt_reason") or "風控暫停")
 
-        return True, "姝ｅ父"
+        return True, "正常"
     except Exception as e:
-        print("check_risk_ok 閷: {}".format(e))
-        return True, "姝ｅ父"
+        print("check_risk_ok 失敗: {}".format(e))
+        return True, "正常"
 
 def record_trade_result(pnl_usdt):
-    """姣忕瓎骞冲€夊緦鍛煎彨锛屾洿鏂伴ⅷ鎺х媭鎱?""
+    # 每筆平倉後呼叫，更新本地風控狀態。
     with RISK_LOCK:
         rs = RISK_STATE
         if pnl_usdt < 0:
@@ -1233,28 +1218,33 @@ def record_trade_result(pnl_usdt):
             })
 
 def get_risk_status():
-    """绲?UI 椤ず鐢紙涓嶇敤閹栵紝閬垮厤姝婚帠锛?""
+    """Return a UI-friendly snapshot of the local risk state."""
     try:
-        rs = RISK_STATE  # 鐩存帴璁€锛屼笉鍔犻帠
-        if '绺借硣鐢㈣櫑鎼嶅凡閬? in str(rs.get("halt_reason", "") or ''):
-            rs["trading_halted"] = False
-            rs["halt_reason"] = ""
-        ok = not rs.get("trading_halted", False)
-        equity = STATE.get("equity", 1)
-        start_eq = rs.get("daily_start_equity", equity) or equity
+        rs = RISK_STATE
+        ok = not bool(rs.get("trading_halted", False))
+        equity = float(STATE.get("equity", 1) or 1)
+        start_eq = float(rs.get("daily_start_equity", equity) or equity)
         return {
-            "trading_ok":        ok,
-            "halt_reason":       rs.get("halt_reason", ""),
-            "consecutive_loss":  rs.get("consecutive_loss", 0),
-            "daily_loss_usdt":   round(rs.get("daily_loss_usdt", 0), 2),
-            "daily_loss_pct":    round((start_eq - equity) / max(start_eq, 1) * 100, 1) if equity > 0 else 0,
+            "trading_ok": ok,
+            "halt_reason": str(rs.get("halt_reason", "") or ""),
+            "consecutive_loss": int(rs.get("consecutive_loss", 0) or 0),
+            "daily_loss_usdt": round(float(rs.get("daily_loss_usdt", 0) or 0), 2),
+            "daily_loss_pct": round((start_eq - equity) / max(start_eq, 1) * 100, 1) if equity > 0 else 0,
             "max_daily_loss_pct": int(MAX_DAILY_LOSS_PCT * 100),
-            "cooldown_until":    None,
+            "cooldown_until": None,
             "current_threshold": _DT.get("current", 50),
         }
-    except Exception as e:
-        return {"trading_ok": True, "halt_reason": "", "consecutive_loss": 0,
-                "daily_loss_usdt": 0, "daily_loss_pct": 0, "max_daily_loss_pct": 15}
+    except Exception:
+        return {
+            "trading_ok": True,
+            "halt_reason": "",
+            "consecutive_loss": 0,
+            "daily_loss_usdt": 0,
+            "daily_loss_pct": 0,
+            "max_daily_loss_pct": 15,
+            "cooldown_until": None,
+            "current_threshold": 50,
+        }
 
 
 
@@ -1299,7 +1289,7 @@ def _manual_release_risk_state():
         RISK_STATE['cooldown_until'] = None
         RISK_STATE['consecutive_loss'] = 0
     update_state(risk_status=get_risk_status())
-    return {'ok': True, 'message': '宸叉墜鍕曡В闄らⅷ鎺ф毇鍋?}
+    return {'ok': True, 'message': '已手動解除風控暫停'}
 
 # =====================================================
 # 瑭曞垎娆婇噸锛堟豢鍒?00锛?# =====================================================
@@ -1596,15 +1586,8 @@ def _trade_edge_pct(trade):
     return 0.0
 
 def _trend_learning_stage(closed_count=None, local_count=None, effective_count=None):
-    cnt = len(get_trend_live_trades(closed_only=True)) if closed_count is None else int(closed_count or 0)
-    local_cnt = cnt if local_count is None else int(local_count or 0)
-    eff_cnt = float(cnt if effective_count is None else effective_count or 0)
-    phase = phase_from_counts(cnt, local_cnt, eff_cnt)
-    if phase == 'learning':
-        return 'learning', 0.0
-    if phase == 'semi':
-        return 'semi', 0.5
-    return 'full', 1.0
+    # 本地 AI 學習 / 成長保護已停用，保留相容回傳格式。
+    return 'disabled', 0.0
 
 def _trade_post_move_profile(trade):
     if not isinstance(trade, dict):
@@ -1634,113 +1617,33 @@ def _trade_post_move_profile(trade):
     }
 
 def _trend_learning_profile(symbol='', regime='neutral', setup=''):
-    rows = get_trend_live_trades(closed_only=True)
-    stage, intervene_ratio = _trend_learning_stage(len(rows))
-    regime = str(regime or 'neutral')
-    setup_mode = _normalize_setup_mode(setup)
-
-    def _match(items, by_symbol=False, by_regime=False):
-        out = []
-        for t in items:
-            if by_symbol and str(t.get('symbol') or '') != str(symbol or ''):
-                continue
-            bd = dict(t.get('breakdown') or {})
-            if by_regime and str(bd.get('Regime', 'neutral') or 'neutral') != regime:
-                continue
-            if setup_mode and _normalize_setup_mode(t.get('setup_label') or bd.get('Setup', '')) != setup_mode:
-                continue
-            out.append(t)
-        return out
-
-    local = _match(rows, by_symbol=True, by_regime=True)
-    if len(local) >= 6:
-        source = 'local'
-        picked = local
-    else:
-        sym_rows = _match(rows, by_symbol=True, by_regime=False)
-        if len(sym_rows) >= 8:
-            source = 'symbol'
-            picked = sym_rows
-        else:
-            reg_rows = _match(rows, by_symbol=False, by_regime=True)
-            if len(reg_rows) >= 12:
-                source = 'regime'
-                picked = reg_rows
-            else:
-                source = 'global'
-                picked = rows
-
-    if not picked:
-        return {
-            'stage': stage, 'intervene_ratio': intervene_ratio, 'count': 0, 'continuation_rate': 0.0,
-            'avg_run_pct': 0.0, 'avg_pullback_pct': 0.0, 'hold_bias': 0.0, 'source': 'none', 'note': '瓒ㄥ嫝妯ｆ湰涓嶈冻锛堥噸缃緦閲嶆柊绱锛?
-        }
-
-    profs = [_trade_post_move_profile(t) for t in picked]
-    cont_hits = [p for p in profs if p.get('continuation')]
-    count = len(profs)
-    cont_rate = len(cont_hits) / max(count, 1)
-    avg_run = sum(float(p.get('run_pct', 0) or 0) for p in profs) / max(count, 1)
-    avg_pull = sum(float(p.get('pullback_pct', 0) or 0) for p in profs) / max(count, 1)
-    if count >= 6 and cont_rate >= 0.38 and avg_run > max(avg_pull * 1.15, 0.9):
-        hold_bias = min(1.0, (cont_rate - 0.30) * 1.9 + min(avg_run / max(avg_pull + 0.25, 1.0), 2.0) * 0.18)
-    elif count >= 6 and cont_rate <= 0.18:
-        hold_bias = -min(0.75, (0.24 - cont_rate) * 2.6)
-    else:
-        hold_bias = 0.0
-    note = f'瓒ㄥ嫝瀛哥繏:{source}|妯ｆ湰{count}|寤剁簩鐜噞cont_rate*100:.0f}%|run{avg_run:.2f}|pull{avg_pull:.2f}'
+    # 本地 AI 學習 / 成長保護已停用，保留相容回傳格式。
     return {
-        'stage': stage, 'intervene_ratio': intervene_ratio, 'count': count,
-        'continuation_rate': round(cont_rate, 4), 'avg_run_pct': round(avg_run, 4),
-        'avg_pullback_pct': round(avg_pull, 4), 'hold_bias': round(hold_bias, 4),
-        'source': source, 'note': note,
+        'stage': 'disabled',
+        'intervene_ratio': 0.0,
+        'count': 0,
+        'continuation_rate': 0.0,
+        'avg_run_pct': 0.0,
+        'avg_pullback_pct': 0.0,
+        'hold_bias': 0.0,
+        'source': 'disabled',
+        'note': '本地 AI 學習已停用',
     }
 
 def _ui_trend_payload(symbol='', regime='neutral', setup=''):
-    try:
-        prof = _trend_learning_profile(symbol=symbol, regime=regime, setup=setup)
-        stage = str(prof.get('stage') or 'learning')
-        hold_bias = float(prof.get('hold_bias', 0.0) or 0.0)
-        cont_rate = float(prof.get('continuation_rate', 0.0) or 0.0)
-        count = int(prof.get('count', 0) or 0)
-        intervene_ratio = float(prof.get('intervene_ratio', 0.0) or 0.0)
-        source = str(prof.get('source') or 'none')
-        source_bonus = {'local': 5.0, 'symbol': 4.0, 'regime': 2.5, 'global': 1.0}.get(source, 0.0)
-        if stage == 'learning':
-            confidence = min(58.0, 14.0 + count * 1.05 + cont_rate * 22.0 + source_bonus + max(hold_bias, 0.0) * 9.0)
-        elif stage == 'semi':
-            confidence = min(84.0, 34.0 + count * 0.38 + max(hold_bias, 0.0) * 26.0 + cont_rate * 24.0 + intervene_ratio * 10.0 + source_bonus)
-        else:
-            confidence = min(97.0, 46.0 + count * 0.22 + max(hold_bias, 0.0) * 29.0 + cont_rate * 28.0 + intervene_ratio * 12.0 + source_bonus)
-        if hold_bias < -0.08:
-            confidence = max(12.0, confidence - min(18.0, abs(hold_bias) * 22.0))
-        hold_reason = 'trend_continuation' if hold_bias > 0.10 and stage in ('semi', 'full') else 'trend_caution' if hold_bias < -0.10 else 'normal_manage'
-        mode_label = {'learning': 'learning', 'semi': 'partial', 'full': 'full'}.get(stage, 'learning')
-        return {
-            'trend_mode': mode_label,
-            'hold_reason': hold_reason,
-            'trend_confidence': round(max(0.0, min(confidence, 99.0)), 1),
-            'trend_learning_count': count,
-            'trend_continuation_rate': round(cont_rate * 100.0, 1),
-            'trend_hold_bias': round(hold_bias, 4),
-            'trend_note': str(prof.get('note') or ''),
-            'trend_source': str(prof.get('source') or 'none'),
-            'trend_avg_run_pct': float(prof.get('avg_run_pct', 0.0) or 0.0),
-            'trend_avg_pullback_pct': float(prof.get('avg_pullback_pct', 0.0) or 0.0),
-        }
-    except Exception as e:
-        return {
-            'trend_mode': 'learning',
-            'hold_reason': 'normal_manage',
-            'trend_confidence': 0.0,
-            'trend_learning_count': 0,
-            'trend_continuation_rate': 0.0,
-            'trend_hold_bias': 0.0,
-            'trend_note': f'瓒ㄥ嫝璩囨枡閷: {e}',
-            'trend_source': 'error',
-            'trend_avg_run_pct': 0.0,
-            'trend_avg_pullback_pct': 0.0,
-        }
+    # 保留 UI 欄位，但不再使用本地 AI 學習資料。
+    return {
+        'trend_mode': 'disabled',
+        'hold_reason': 'normal_manage',
+        'trend_confidence': 0.0,
+        'trend_learning_count': 0,
+        'trend_continuation_rate': 0.0,
+        'trend_hold_bias': 0.0,
+        'trend_note': '本地 AI 學習已停用',
+        'trend_source': 'disabled',
+        'trend_avg_run_pct': 0.0,
+        'trend_avg_pullback_pct': 0.0,
+    }
 
 def _live_trade_stats(symbol=None, regime=None):
     rows = get_live_trades(closed_only=True)
@@ -1807,15 +1710,11 @@ def _ai_status_from_live(stats):
 def _normalize_setup_mode(setup=''):
     s = str(setup or '')
     sl = s.lower()
-    if ('绐佺牬' in s) or ('鐖嗙櫦' in s) or ('news' in sl) or ('breakout' in sl):
+    if ('breakout' in sl) or ('突破' in s) or ('爆量' in s) or ('news' in sl):
         return 'breakout'
-    if (
-        ('鍗€闁? in s) or ('闇囩洩' in s) or ('绠遍珨' in s) or ('鍧囧€煎洖姝? in s)
-        or ('鎺冧綆鍥炴敹' in s) or ('鎺冮珮鍥炶惤' in s) or ('鍥炶' in s)
-        or ('range' in sl) or ('mean reversion' in sl)
-    ):
+    if ('range' in sl) or ('mean reversion' in sl) or ('區間' in s) or ('震盪' in s) or ('箱體' in s) or ('均值回歸' in s):
         return 'range'
-    if ('鍥炶俯' in s) or ('绾屾敾' in s) or ('寤剁簩' in s) or ('鍙嶅綀绾岃穼' in s):
+    if ('trend' in sl) or ('回踩' in s) or ('續攻' in s) or ('延續' in s) or ('反彈轉跌' in s):
         return 'trend'
     return 'main'
 
@@ -1824,16 +1723,16 @@ def _regime_setup_fit(regime='neutral', setup=''):
     regime = str(regime or 'neutral')
     if regime == 'range':
         if mode in ('trend', 'breakout'):
-            return False, '闇囩洩甯傚牬涓嶈拷瓒ㄥ嫝/绐佺牬'
-        return True, '闇囩洩甯傚牬閰嶅崁闁撴墦娉?
+            return False, '區間市況不追趨勢或突破'
+        return True, '區間市況適合震盪與回歸型做法'
     if regime in ('news', 'breakout'):
         if mode == 'range':
-            return False, '鐖嗙櫦鐩や笉鍋氬崁闁撳弽鍚?
-        return True, '鐖嗙櫦鐩ゅ厑瑷辩獊鐮?瓒ㄥ嫝'
+            return False, '突破或消息盤不優先做區間反向'
+        return True, '突破或消息盤可優先順勢與突破型做法'
     # neutral / trend-like
     if mode == 'range':
-        return False, '瓒ㄥ嫝/涓€х洡涓嶅劒鍏堝仛鍗€闁撻€嗗嫝'
-    return True, '甯傚牬鑸囩瓥鐣ョ浉瀹?
+        return False, '趨勢盤不優先做區間逆勢'
+    return True, '依結構與品質決定'
 
 
 def _normalize_market_state(state='neutral'):
@@ -1865,41 +1764,31 @@ def _classify_market_atlas(regime='neutral', setup='', breakdown=None, desc=''):
     regime = str(regime or bd.get('Regime') or 'neutral')
     setup_text = str(setup or bd.get('Setup') or '')
     desc_text = str(desc or '')
-    pre_s = float(bd.get('钃勫嫝绲愭', 0) or 0)
-    bo_s = float(bd.get('绐佺牬闋愬垽', 0) or 0)
-    fvg_rt = float(bd.get('FVG鍥炶俯鍝佽唱', 0) or 0)
-    fake_s = float(bd.get('鍋囩獊鐮存烤缍?, 0) or 0)
-    liq_s = float(bd.get('娴佸嫊鎬ф巸鍠?, 0) or 0)
-    entry_q = float(bd.get('閫插牬鍝佽唱', 0) or 0)
     reg_conf = float(bd.get('RegimeConf', 0) or 0)
     state = 'neutral_transition'
-    confidence = 0.38 + min(abs(entry_q) / 18.0, 0.12)
-    note = '涓€ч亷娓?
+    confidence = 0.40
+    note = '中性過渡'
 
-    if fake_s <= -3 or '鍋囩獊鐮? in desc_text or '鎺冩祦鍕曟€у弽杞? in setup_text:
+    if ('假突破' in desc_text) or ('假突破' in setup_text) or ('reversal' in desc_text.lower()):
         state = 'fake_breakout_reversal'
-        confidence = 0.68 + min(abs(fake_s) / 10.0, 0.22)
-        note = '鍋囩獊鐮?鎺冩祦鍕曟€у緦鍙嶈綁'
-    elif regime in ('news', 'breakout') and (bo_s >= 2 or pre_s >= 2):
+        confidence = 0.68
+        note = '假突破反轉'
+    elif regime in ('news', 'breakout') or ('breakout' in setup_text.lower()) or ('突破' in setup_text):
         state = 'news_expansion' if regime == 'news' else 'breakout_ready'
-        confidence = 0.66 + min((abs(bo_s) + abs(pre_s)) / 14.0, 0.24)
-        note = '娑堟伅/鐖嗙櫦鎿村嫉绲愭'
-    elif pre_s >= 3 and bo_s >= 2:
-        state = 'squeeze_ready'
-        confidence = 0.64 + min((pre_s + bo_s) / 16.0, 0.22)
-        note = '鏀舵杺寰屾簴鍌欑獊鐮?
-    elif fvg_rt >= 2 or ('鍥炶俯' in setup_text and regime in ('trend', 'neutral')):
+        confidence = 0.66
+        note = '突破擴張'
+    elif ('回踩' in setup_text) and regime in ('trend', 'neutral'):
         state = 'trend_pullback'
-        confidence = 0.60 + min(abs(fvg_rt) / 12.0, 0.22)
-        note = '瓒ㄥ嫝鍥炶俯/鍙嶅綀鎵挎帴'
-    elif regime == 'range' or ('鍗€闁? in setup_text and abs(liq_s) <= 2):
+        confidence = 0.60
+        note = '趨勢回踩'
+    elif regime == 'range' or ('區間' in setup_text):
         state = 'range_rotation'
-        confidence = 0.58 + min(abs(entry_q) / 16.0, 0.18)
-        note = '鍗€闁撲締鍥炶吉鍕?
-    elif regime == 'trend' or ('寤剁簩' in setup_text) or abs(liq_s) >= 3:
+        confidence = 0.58
+        note = '區間輪動'
+    elif regime == 'trend' or ('延續' in setup_text) or ('續攻' in setup_text):
         state = 'trend_continuation'
-        confidence = 0.60 + min((abs(liq_s) + abs(entry_q)) / 18.0, 0.22)
-        note = '瓒ㄥ嫝寤剁簩/闋嗗嫝鍔犻€?
+        confidence = 0.60
+        note = '趨勢延續'
     confidence = max(0.35, min(confidence + min(reg_conf * 0.12, 0.08), 0.95))
     return _normalize_market_state(state), round(confidence, 3), note
 
@@ -1917,209 +1806,45 @@ def _market_state_from_trade(trade):
 
 
 def _market_state_profile(symbol='', regime='neutral', setup='', market_state=''):
-    rows = get_trend_live_trades(closed_only=True)
     wanted = _normalize_market_state(market_state or 'neutral_transition')
-    symbol = str(symbol or '')
-    regime = str(regime or 'neutral')
-    setup_mode = _normalize_setup_mode(setup)
-    state_rows = []
-    symbol_state_rows = []
-    regime_state_rows = []
-    for t in rows:
-        bd = dict(t.get('breakdown') or {})
-        t_state = _market_state_from_trade(t)
-        if t_state != wanted:
-            continue
-        state_rows.append(t)
-        if symbol and str(t.get('symbol') or '') == symbol:
-            symbol_state_rows.append(t)
-        if str(bd.get('Regime', 'neutral') or 'neutral') == regime:
-            regime_state_rows.append(t)
-    picked = []
-    source = 'none'
-    if len(symbol_state_rows) >= 5:
-        picked = symbol_state_rows
-        source = 'symbol_state'
-    elif len(regime_state_rows) >= 7:
-        picked = regime_state_rows
-        source = 'regime_state'
-    elif len(state_rows) >= 9:
-        picked = state_rows
-        source = 'market_state'
-    if not picked:
-        return {
-            'market_state': wanted, 'count': 0, 'win_rate': 50.0, 'avg_pnl': 0.0,
-            'confidence': 0.0, 'source': source, 'boost': 0.0,
-            'note': f'甯傚牬鐙€鎱嬫ǎ鏈笉瓒?{wanted}'
-        }
-    count = len(picked)
-    wins = sum(1 for t in picked if t.get('result') == 'win')
-    win_rate = wins / max(count, 1) * 100.0
-    avg_pnl = sum(_trade_learn_metric(t) for t in picked) / max(count, 1)
-    confidence = min(0.95, 0.35 + count / 24.0)
-    boost = (win_rate - 50.0) * 0.025 + avg_pnl * 10.0
-    if setup_mode:
-        matched_setup = [t for t in picked if _normalize_setup_mode((t.get('setup_label') or (t.get('breakdown') or {}).get('Setup') or '')) == setup_mode]
-        if len(matched_setup) >= 4:
-            count2 = len(matched_setup)
-            wins2 = sum(1 for t in matched_setup if t.get('result') == 'win')
-            win_rate2 = wins2 / max(count2, 1) * 100.0
-            avg_pnl2 = sum(_trade_learn_metric(t) for t in matched_setup) / max(count2, 1)
-            win_rate = (win_rate * 0.45) + (win_rate2 * 0.55)
-            avg_pnl = (avg_pnl * 0.45) + (avg_pnl2 * 0.55)
-            boost += (win_rate2 - 50.0) * 0.01 + avg_pnl2 * 4.0
-            source += '+setup'
     return {
-        'market_state': wanted, 'count': count, 'win_rate': round(win_rate, 2), 'avg_pnl': round(avg_pnl, 4),
-        'confidence': round(confidence, 3), 'source': source,
-        'boost': round(max(min(boost, 4.5), -4.5), 3),
-        'note': f'甯傚牬瀛哥繏:{wanted}|{source}|妯ｆ湰{count}|鍕濈巼{win_rate:.1f}%|鍧囧埄{avg_pnl:+.3f}'
+        'market_state': wanted,
+        'count': 0,
+        'win_rate': 50.0,
+        'avg_pnl': 0.0,
+        'confidence': 0.0,
+        'source': 'disabled',
+        'boost': 0.0,
+        'note': '本地市場狀態學習已停用',
     }
 
 
 def _symbol_hard_block(symbol=''):
-    rows = [t for t in get_live_trades(closed_only=True) if str(t.get('symbol')) == str(symbol)]
-    cnt = len(rows)
-    if cnt < SYMBOL_BLOCK_MIN_TRADES:
-        return False, ''
-    wins = sum(1 for t in rows if t.get('result') == 'win')
-    wr = wins / max(cnt, 1) * 100.0
-    if wr < SYMBOL_BLOCK_MIN_WINRATE:
-        return True, '瑭插梗瀵﹀柈瓒呴亷10绛嗕笖鍕濈巼浣庢柤40%锛屽皝閹栧梗绋?
     return False, ''
 
 
 def _strategy_live_rows(symbol='', regime='neutral', setup=''):
-    setup_mode = _normalize_setup_mode(setup)
-    rows = []
-    for t in get_live_trades(closed_only=True):
-        if str(t.get('symbol') or '') != str(symbol):
-            continue
-        bd = dict(t.get('breakdown') or {})
-        t_regime = str(bd.get('Regime', 'neutral') or 'neutral')
-        t_setup = _normalize_setup_mode(t.get('setup_label') or bd.get('Setup') or t.get('setup') or '')
-        if t_regime == str(regime or 'neutral') and t_setup == setup_mode:
-            rows.append(t)
-    return rows
+    return []
 
 
 def _strategy_hard_block(symbol='', regime='neutral', setup=''):
-    rows = _strategy_live_rows(symbol=symbol, regime=regime, setup=setup)
-    cnt = len(rows)
-    if cnt < STRATEGY_BLOCK_MIN_TRADES:
-        return False, ''
-    wins = sum(1 for t in rows if t.get('result') == 'win')
-    wr = wins / max(cnt, 1) * 100.0
-    if wr < STRATEGY_BLOCK_MIN_WINRATE:
-        return True, f'瑭茬瓥鐣ュ鍠秴閬?0绛嗕笖鍕濈巼浣庢柤{int(STRATEGY_BLOCK_MIN_WINRATE)}%锛屽皝閹栫瓥鐣?
     return False, ''
 
 
 def _strategy_score_lookup(symbol='', regime='neutral', setup=''):
-    setup_mode = _normalize_setup_mode(setup)
-    wanted = f'{regime}|{setup}|{symbol}'
-    best = None
-    try:
-        with AI_LOCK:
-            board = list(AI_DB.get('strategy_scoreboard', []) or [])
-            bt_rows = list((AUTO_BACKTEST_STATE.get('results') or []))
-        for row in board:
-            if str(row.get('strategy') or '') == wanted:
-                best = dict(row)
-                best['source'] = 'live_exact'
-                return best
-            if str(row.get('strategy') or '').endswith(f'|{symbol}') and str(row.get('strategy_mode') or 'main') == setup_mode:
-                best = dict(row)
-                best['source'] = 'live_mode'
-        if best:
-            return best
-        for row in bt_rows:
-            if str(row.get('symbol') or '') != str(symbol):
-                continue
-            row_mode = str(row.get('strategy_mode') or 'main')
-            row_regime = str(row.get('market_regime') or 'neutral')
-            if row_mode == setup_mode and row_regime == str(regime or 'neutral'):
-                out = dict(row)
-                out['count'] = int(row.get('trades', 0) or 0)
-                out['source'] = 'backtest_exact'
-                return out
-        for row in bt_rows:
-            if str(row.get('symbol') or '') == str(symbol) and str(row.get('strategy_mode') or 'main') == setup_mode:
-                out = dict(row)
-                out['count'] = int(row.get('trades', 0) or 0)
-                out['source'] = 'backtest_mode'
-                return out
-    except Exception:
-        pass
     return {}
 
 
 def _strategy_margin_multiplier(symbol='', regime='neutral', setup=''):
-    row = _strategy_score_lookup(symbol=symbol, regime=regime, setup=setup)
-    count = int(row.get('count', row.get('trades', 0)) or 0)
-    if count < STRATEGY_CAPITAL_MIN_TRADES:
-        return 1.0, '绛栫暐妯ｆ湰涓嶈冻'
-    ev = float(row.get('ev_per_trade', 0) or 0)
-    wr = float(row.get('win_rate', 0) or 0)
-    dd = float(row.get('max_drawdown_pct', 0) or 0)
-    mult = 1.0
-    note = '绛栫暐璩囬噾涓€?
-    if ev >= 0.05 and wr >= 55 and dd <= 12:
-        mult = 1.18 if count < 10 else 1.28
-        note = '绛栫暐璩囬噾鏀惧ぇ'
-    elif ev < 0 or wr < 45:
-        mult = 0.72 if count >= 8 else 0.85
-        note = '绛栫暐璩囬噾绺皬'
-    return round(clamp(mult, 0.65, 1.35), 4), note
+    return 1.0, '本地策略學習已停用'
 
 
 def _entry_quality_feedback(symbol='', regime='neutral', setup='', entry_quality=0):
-    try:
-        with AI_LOCK:
-            eq_db = dict((AI_DB.get('entry_quality_feedback', {}) or {}))
-        bin_key = 'hq' if float(entry_quality or 0) >= 7 else 'mq' if float(entry_quality or 0) >= 5 else 'lq'
-        lookup_keys = [
-            f'{symbol}|{regime}|{_normalize_setup_mode(setup)}|{bin_key}',
-            f'{symbol}|{regime}|all|{bin_key}',
-            f'all|{regime}|{_normalize_setup_mode(setup)}|{bin_key}',
-        ]
-        for key in lookup_keys:
-            rec = dict(eq_db.get(key) or {})
-            count = int(rec.get('count', 0) or 0)
-            if count < AI_MIN_SAMPLE_EFFECT:
-                continue
-            loss_rate = float(rec.get('loss_rate', 0) or 0)
-            avg = float(rec.get('avg_pnl', 0) or 0)
-            if loss_rate >= 0.6 and avg < 0:
-                return -2.5, '楂樺搧璩▕铏熻繎鏈熷け鐪?
-            if loss_rate <= 0.35 and avg > 0:
-                return 1.2, '閫插牬鍝佽唱鍥為浣?
-    except Exception:
-        pass
     return 0.0, ''
 
 
 def _ai_risk_multiplier(symbol='', regime='neutral', setup='', score=0, breakdown=None):
-    profile = _ai_strategy_profile(symbol, regime=regime, setup=setup)
-    confidence = float(profile.get('confidence', 0) or 0)
-    ev = float(profile.get('ev_per_trade', 0) or 0)
-    wr = float(profile.get('win_rate', 0) or 0)
-    mult = 1.0
-    note = 'AI棰ㄦ帶涓€?
-    if bool(profile.get('hard_block')):
-        return 0.55, 'AI棰ㄦ帶灏侀帠绺€?
-    if confidence < 0.5:
-        mult *= 0.75
-        note = 'AI淇″績涓嶈冻绺€?
-    if ev > 0.05 and wr >= 55 and confidence >= 0.55:
-        mult *= 1.08
-        note = 'AI淇″績浣冲井鏀惧ぇ'
-    elif ev < 0 or wr < 45:
-        mult *= 0.78
-        note = 'AI寮卞嫝绺€?
-    if NEUTRAL_REGIME_BLOCK and str(regime or 'neutral') == 'neutral':
-        mult *= 0.92
-    return round(clamp(mult, 0.5, 1.2), 4), note
+    return 1.0, 'local_ai_disabled'
 
 
 def _missed_move_feedback(trade):
@@ -2139,7 +1864,7 @@ def _ai_warmup_mode():
     return len(get_live_trades(closed_only=True)) < 20
 
 def save_full_state():
-    """鍌欎唤绉诲嫊姝㈢泩鐙€鎱嬪埌纭"""
+    """Persist trailing-stop state to disk."""
     try:
         dir2 = os.path.dirname(STATE_BACKUP_PATH)
         if dir2: os.makedirs(dir2, exist_ok=True)
@@ -2164,7 +1889,7 @@ def save_full_state():
         print("鐙€鎱嬪倷浠藉け鏁? {}".format(e))
 
 def load_full_state():
-    """寰炵‖纰熸仮寰╃Щ鍕曟鐩堢媭鎱?""
+    # 從本地備份檔恢復核心狀態。
     global ORDER_THRESHOLD
     try:
         if not os.path.exists(STATE_BACKUP_PATH):
@@ -2187,7 +1912,7 @@ def load_full_state():
         print("鐙€鎱嬫仮寰╁け鏁? {}".format(e))
 
 def save_risk_state():
-    """鍌欎唤棰ㄦ帶鐙€鎱嬶紙JSON 鍙暀蹇収锛屼簨浠堕€?SQLite锛?""
+    # 備份風控狀態。
     try:
         snapshot = {
             "today_date": RISK_STATE.get("today_date", ""),
@@ -2203,11 +1928,11 @@ def save_risk_state():
         print("棰ㄦ帶鍌欎唤澶辨晽: {}".format(e))
 
 def load_risk_state():
-    """寰炵‖纰熸仮寰╅ⅷ鎺х媭鎱?""
+    # 從本地備份檔恢復風控狀態。
     try:
         backup = atomic_json_load(RISK_STATE_PATH, None)
         if not backup:
-            print("鈿狅笍 鐒￠ⅷ鎺у倷浠斤紝寰為牠闁嬪")
+            print("找不到風控快照，從乾淨狀態開始")
             return
         # 鍙仮寰╀粖澶╃殑璩囨枡
         today = tw_today()
@@ -2218,13 +1943,12 @@ def load_risk_state():
                 RISK_STATE["consecutive_loss"]= backup.get("consecutive_loss", 0)
                 RISK_STATE["trading_halted"]  = backup.get("trading_halted", False)
                 RISK_STATE["halt_reason"]     = backup.get("halt_reason", "")
-            print("鉁?棰ㄦ帶鐙€鎱嬪凡鎭㈠京锛堜粖鏃ヨ櫑鎼?{:.2f}U锛?.format(
-                backup.get("daily_loss_usdt", 0)))
+            print("風控狀態已恢復（今日虧損 {:.2f}U）".format(backup.get("daily_loss_usdt", 0)))
             append_risk_event('snapshot_restored', backup)
         else:
-            print("鈿狅笍 棰ㄦ帶鍌欎唤鏄槰澶╃殑锛岄噸缃?)
+            print("風控備份不是今天的，已忽略")
     except FileNotFoundError:
-        print("鈿狅笍 鐒￠ⅷ鎺у倷浠斤紝寰為牠闁嬪")
+        print("找不到風控快照，從乾淨狀態開始")
     except Exception as e:
         print("棰ㄦ帶鎭㈠京澶辨晽: {}".format(e))
 
@@ -2329,21 +2053,27 @@ save_learn_db(LEARN_DB)
 
 
 # =====================================================
-# 鍏ㄥ煙鐙€鎱?# =====================================================
+# Global runtime state
 STATE = {
     "news_score":        0,
-    "latest_news_title": "鏂拌仦绯荤当宸插仠鐢?,
-    "news_sentiment":    "宸插仠鐢?,
+    "latest_news_title": "新聞模組已停用",
+    "news_sentiment": "已停用",
     "top_signals":       [],
     "active_positions":  [],
-    "scan_progress":     "鍟熷嫊涓紝绱勯渶 2 鍒嗛悩瀹屾垚棣栬吉鎺冩弿...",
+    "scan_progress": "掃描中，首輪建立約需 2 分鐘...",
     "trade_history":     [],
     "total_pnl":         0.0,
-    "equity":            0.0,   # 甯虫埗绺借硣鐢紙鍗虫檪锛?    "last_update":       "--",
+    "equity":            0.0,
+    "last_update":       "--",
     "scan_count":        0,
-    "halt_reason":       "",     # 棰ㄦ帶鍋滄鍘熷洜
-    "risk_status":       {},     # 棰ㄦ帶鐙€鎱嬫憳瑕?    "trailing_info":     {},     # 绉诲嫊姝㈢泩杩借工鐙€鎱嬶紙绲I椤ず锛?    "session_info":      {},
-    "market_info":       {"pattern":"鍒濆鍖栦腑","direction":"涓€?,"btc_price":0,"prediction":""},
+    "halt_reason":       "",
+    "risk_status":       {},
+    "trailing_info":     {},
+    "session_info":      {},
+    "market_info":       {"pattern":"????","direction":"neutral","btc_price":0,"prediction":""},
+    "lt_info":           {"position":None,"entry_price":0,"pnl":0,"pattern":"","prediction":""},
+    "session_info":      {},
+    "market_info":       {"pattern":"????","direction":"neutral","btc_price":0,"prediction":""},
     "lt_info":           {"position":None,"entry_price":0,"pnl":0,"pattern":"","prediction":""},
     "fvg_orders":        {},
     "threshold_info":    {"current": 60, "phase": "闋愯ō"},  # 鍕曟厠闁€妾昏硣瑷?    "auto_order_audit":  {},
@@ -2361,28 +2091,28 @@ STATE = {
 }
 STATE_LOCK = threading.Lock()
 BACKEND_THREAD_LABELS = {
-    'position': '鎸佸€夌洠鎺?,
-    'enhanced_position': '寮峰寲鎸佸€夌洠鎺?,
+    'trailing': '移動止盈',
+    'enhanced_position': '強化持倉監控',
     'scan': '甯傚牬鎺冩弿',
-    'trailing': '绉诲嫊姝㈢泩',
+    'trailing': '移動止盈',
     'session': '浜ゆ槗鏅傛鐩ｆ帶',
     'market': '澶х洡鍒嗘瀽',
     'fvg_monitor': 'FVG 鎺涘柈鐩ｆ帶',
     'auto_backtest': '鑷嫊鍥炴脯',
-    'memory_guard': '瑷樻喍楂斿畧璀?,
+    'memory_guard': '記憶體守護',
     'news': '鏂拌仦鏁寸悊',
 }
 BACKEND_THREAD_NOTES = {
-    'position': '鍚屾鎸佸€夈€佸瑷楄垏淇濊鍠媭鎱?,
-    'enhanced_position': '瑁滃挤鎸佸€夐璀夎垏鐣板父淇京',
-    'scan': '鎺冩弿鎺掕姒溿€佹暣鐞嗗€欓伕銆佹焙瀹氭槸鍚﹂€佸',
-    'trailing': '鎸佺簩鏇存柊淇濇湰鑸囩Щ鍕曟鐩?,
-    'session': '鐩ｇ湅浜ゆ槗鏅傛鑸囩郴绲辩瘈濂?,
-    'market': '鏇存柊澶х洡鏂瑰悜銆佸挤寮辫垏甯傚牬鍨嬫厠',
-    'fvg_monitor': '杩借工 FVG 鎺涘柈鑸囧け鏁堝彇娑?,
-    'auto_backtest': '缍 AI 鍊欓伕鍥炴脯鑸囩瓥鐣ユ帓琛?,
-    'memory_guard': '鐩ｆ帶瑷樻喍楂旇垏鍩疯绌╁畾鎬?,
-    'news': '鏁寸悊鏂拌仦鑸囦簨浠惰儗鏅?,
+    'position': '同步持倉、委託與保護單狀態',
+    'enhanced_position': '確認持倉監控與異常修復',
+    'scan': '掃描排行榜、整理候選、決定是否送審',
+    'trailing': '持續更新保本與移動止盈',
+    'session': '監看交易時段與系統節奏',
+    'market': '更新大盤方向、強弱與市場型態',
+    'fvg_monitor': '追蹤 FVG 掛單與失效取消',
+    'auto_backtest': '執行 AI 候選回測與策略排行',
+    'memory_guard': '監控記憶體與程序穩定性',
+    'news': '整理新聞與事件背景',
 }
 
 def update_state(**kwargs):
@@ -2570,8 +2300,8 @@ def verify_protection_orders(symbol, side, sl_price, tp_price):
     return sl_ok, tp_ok
 
 def ensure_exchange_protection(sym, side, pos_side, qty, sl_price, tp_price, verify_wait_sec=1.0):
-    """涓嬩富鍠緦绔嬪嵆瑁滄帥浜ゆ槗鎵€淇濊鍠紱鑻ユ鎼嶉璀夊け鏁楋紝鍥炲偝 sl_ok=False銆?""
-    sl_side = 'sell' if side == 'buy' else 'buy'
+    # 下主單後立即補上交易所保護單，並在短暫等待後回查是否真的掛上。
+    sl_side = 'sell' if str(side).lower() == 'buy' else 'buy'
     qty = float(qty or 0)
     sl_ok = False
     tp_ok = False
@@ -2579,87 +2309,92 @@ def ensure_exchange_protection(sym, side, pos_side, qty, sl_price, tp_price, ver
     if qty <= 0:
         with PROTECTION_LOCK:
             PROTECTION_STATE[sym] = {
-                'sl_ok': False, 'tp_ok': False, 'sl': round(float(sl_price or 0), 8),
-                'tp': round(float(tp_price or 0), 8), 'side': (side or '').lower(),
-                'updated_at': tw_now_str(), 'note': 'qty<=0锛屾湭鎺涗繚璀峰柈'
+                'sl_ok': False,
+                'tp_ok': False,
+                'sl': round(float(sl_price or 0), 8),
+                'tp': round(float(tp_price or 0), 8),
+                'side': (side or '').lower(),
+                'updated_at': tw_now_str(),
+                'note': 'qty<=0，未建立保護單',
             }
             snap = snapshot_mapping(PROTECTION_STATE)
         update_state(protection_state=snap)
         return False, False
 
-    # 姝㈡悕鍠紙涓夌ó鏍煎紡渚濆簭鍢楄│锛?    try:
-        exchange.create_order(sym, 'market', sl_side, qty, params={
-            'reduceOnly':  True,
-            'stopPrice':   str(sl_price),
-            'orderType':   'stop',
-            'posSide':     pos_side,
-            'tdMode':      'cross',
-        })
-        print("姝㈡悕鍠垚鍔?鏍煎紡1): {} @{}".format(sym, sl_price))
-        sl_ok = True
-    except Exception:
-        pass
+    sl_attempts = [
+        {
+            'reduceOnly': True,
+            'stopPrice': str(sl_price),
+            'orderType': 'stop',
+            'posSide': pos_side,
+            'tdMode': 'cross',
+        },
+        {
+            'reduceOnly': True,
+            'stopLossPrice': str(sl_price),
+            'posSide': pos_side,
+            'tdMode': 'cross',
+        },
+        {
+            'reduceOnly': True,
+            'triggerPrice': str(sl_price),
+            'triggerType': 'mark_price',
+            'posSide': pos_side,
+            'tdMode': 'cross',
+        },
+    ]
+    tp_attempts = [
+        {
+            'reduceOnly': True,
+            'stopPrice': str(tp_price),
+            'orderType': 'takeProfit',
+            'posSide': pos_side,
+            'tdMode': 'cross',
+        },
+        {
+            'reduceOnly': True,
+            'triggerPrice': str(tp_price),
+            'takeProfitPrice': str(tp_price),
+            'posSide': pos_side,
+            'tdMode': 'cross',
+        },
+        {
+            'reduceOnly': True,
+            'triggerPrice': str(tp_price),
+            'triggerType': 'mark_price',
+            'orderType': 'takeProfit',
+            'posSide': pos_side,
+            'tdMode': 'cross',
+        },
+    ]
 
-    if not sl_ok:
+    for idx, params in enumerate(sl_attempts, start=1):
         try:
-            exchange.create_order(sym, 'market', sl_side, qty, params={
-                'reduceOnly':    True,
-                'stopLossPrice': str(sl_price),
-                'posSide':       pos_side,
-                'tdMode':        'cross',
-            })
-            print("姝㈡悕鍠垚鍔?鏍煎紡2): {} @{}".format(sym, sl_price))
+            exchange.create_order(sym, 'market', sl_side, qty, params=params)
+            print("止損保護單建立成功(格式{}): {} @{}".format(idx, sym, sl_price))
             sl_ok = True
-        except Exception:
-            pass
+            break
+        except Exception as exc:
+            print("止損保護單建立失敗(格式{}): {}".format(idx, exc))
 
-    if not sl_ok:
+    for idx, params in enumerate(tp_attempts, start=1):
         try:
-            exchange.create_order(sym, 'market', sl_side, qty, params={
-                'reduceOnly':   True,
-                'triggerPrice': str(sl_price),
-                'triggerType':  'mark_price',
-                'posSide':      pos_side,
-            })
-            print("姝㈡悕鍠垚鍔?鏍煎紡3): {} @{}".format(sym, sl_price))
-            sl_ok = True
-        except Exception as e3:
-            print("姝㈡悕涓夌ó鏍煎紡閮藉け鏁? {}".format(e3))
-
-    # 姝㈢泩鍠紙鍏╃ó鏍煎紡渚濆簭鍢楄│锛?    try:
-        exchange.create_order(sym, 'market', sl_side, qty, params={
-            'reduceOnly':  True,
-            'stopPrice':   str(tp_price),
-            'orderType':   'takeProfit',
-            'posSide':     pos_side,
-            'tdMode':      'cross',
-        })
-        print("姝㈢泩鍠垚鍔?鏍煎紡1): {} @{}".format(sym, tp_price))
-        tp_ok = True
-    except Exception:
-        pass
-
-    if not tp_ok:
-        try:
-            exchange.create_order(sym, 'market', sl_side, qty, params={
-                'reduceOnly':      True,
-                'takeProfitPrice': str(tp_price),
-                'posSide':         pos_side,
-                'tdMode':          'cross',
-            })
-            print("姝㈢泩鍠垚鍔?鏍煎紡2): {} @{}".format(sym, tp_price))
+            exchange.create_order(sym, 'market', sl_side, qty, params=params)
+            print("止盈保護單建立成功(格式{}): {} @{}".format(idx, sym, tp_price))
             tp_ok = True
-        except Exception as tp_err:
-            print("姝㈢泩鎺涘柈澶辨晽锛屼緷璩寸Щ鍕曟鐩堢郴绲? {}".format(tp_err))
+            break
+        except Exception as exc:
+            print("止盈保護單建立失敗(格式{}): {}".format(idx, exc))
 
-    # 浠ヤ氦鏄撴墍闁嬫斁鎺涘柈鍐嶆椹楄瓑锛岄伩鍏?create_order 鎴愬姛浣嗗叾瀵︽矑鎺涗笂
     try:
         time.sleep(max(float(verify_wait_sec), 0.2))
     except Exception:
         pass
+
     v_sl_ok, v_tp_ok = verify_protection_orders(sym, side, sl_price, tp_price)
     sl_ok = bool(sl_ok or v_sl_ok)
     tp_ok = bool(tp_ok or v_tp_ok)
+
     with PROTECTION_LOCK:
         PROTECTION_STATE[sym] = {
             'sl_ok': sl_ok,
@@ -2668,7 +2403,7 @@ def ensure_exchange_protection(sym, side, pos_side, qty, sl_price, tp_price, ver
             'tp': round(float(tp_price or 0), 8),
             'side': (side or '').lower(),
             'updated_at': tw_now_str(),
-            'note': '浜ゆ槗鎵€姝㈡悕宸查璀? if sl_ok else '浜ゆ槗鎵€姝㈡悕椹楄瓑澶辨晽',
+            'note': '止盈止損保護單已確認' if (sl_ok and tp_ok) else '保護單待檢查',
         }
         snap = snapshot_mapping(PROTECTION_STATE)
     update_state(protection_state=snap)
@@ -2839,13 +2574,14 @@ def _normalize_wr_percent(value):
 
 
 def _ai_strategy_profile(symbol, regime='neutral', setup=''):
-    """v35: 鐪?AI 鎺ョ + 涓夊堡鍥為€€銆傚洖娓彧鍋氬€欓伕锛屾帴绠″彧鍚冨鍠€?""
+    # 本地 AI 學習 / 回測融合邏輯已停用，保留與主流程相容的欄位。
     strategy_key = f'{regime}|{setup}|{symbol}'
     setup_mode = _normalize_setup_mode(setup)
-    profile = {
+    return {
         'ready': False,
-        'source': 'live_only',
+        'source': 'disabled',
         'sample_count': 0,
+        'effective_count': 0.0,
         'win_rate': 0.0,
         'avg_pnl': 0.0,
         'ev_per_trade': 0.0,
@@ -2855,270 +2591,24 @@ def _ai_strategy_profile(symbol, regime='neutral', setup=''):
         'hard_block': False,
         'strategy': strategy_key,
         'strategy_mode': setup_mode,
-        'note': 'AI妯ｆ湰涓嶈冻锛屾部鐢ㄤ富绛栫暐锛堝儏鍚冨鍠紝鍥炴脯鍙緵鍊欓伕锛?,
+        'note': '本地 AI 策略學習已停用',
         'confidence': 0.0,
-        'status': 'warmup',
+        'status': 'disabled',
         'symbol_blocked': False,
+        'strategy_blocked': False,
+        'source_weight': 0.0,
+        'phase': 'disabled',
+        'trusted_local_count': 0,
+        'local_count': 0,
+        'mid_count': 0,
+        'global_count': 0,
+        'soft_live_count': 0,
+        'trusted_live_count': 0,
+        'bootstrap_live_count': 0,
+        'strongest_local_count': 0,
+        'fallback_level': 'disabled',
+        'quarantine_count': 0,
     }
-
-    def _trade_setup_mode(trade):
-        try:
-            bd = dict(trade.get('breakdown') or {})
-            raw = str(
-                trade.get('setup_label')
-                or bd.get('Setup')
-                or trade.get('setup')
-                or ''
-            )
-            return _normalize_setup_mode(raw)
-        except Exception:
-            return 'main'
-
-    def _compute_stats_from_rows(rows):
-        stats = weighted_trade_stats(rows, reset_from=None)
-        if not stats:
-            return {
-                "count": 0, "effective_count": 0.0, "win_rate": 0.0, "avg_pnl": 0.0, "ev_per_trade": 0.0,
-                "profit_factor": None, "max_drawdown_pct": None, "std_pnl": None, "weight_sum": 0.0
-            }
-        return stats
-
-    try:
-        bootstrap_rows = get_trend_live_trades(closed_only=True)
-        trusted_rows = get_live_trades(closed_only=True, pool='trusted_live')
-        soft_rows = get_live_trades(closed_only=True, pool='soft_live')
-        quarantine_rows = get_live_trades(closed_only=True, pool='quarantine')
-        all_rows = list(bootstrap_rows or trusted_rows or soft_rows or [])
-        if not all_rows:
-            all_rows = get_live_trades(closed_only=True, pool='all')
-        symbol = str(symbol or '')
-        regime = str(regime or 'neutral')
-        fit_ok, fit_note = _regime_setup_fit(regime, setup)
-        sym_block, sym_note = _symbol_hard_block(symbol)
-        strat_block, strat_note = _strategy_hard_block(symbol, regime, setup)
-
-        current_session_bucket = session_bucket_from_hour(get_tw_time().hour)
-        local_rows = [
-            t for t in all_rows
-            if str(t.get('symbol') or '') == symbol
-            and str((t.get('breakdown') or {}).get('Regime', 'neutral') or 'neutral') == regime
-            and _trade_setup_mode(t) == setup_mode
-        ]
-        local_session_rows = [t for t in local_rows if str(t.get('session_bucket') or '') == current_session_bucket]
-        mid_rows = [
-            t for t in all_rows
-            if str((t.get('breakdown') or {}).get('Regime', 'neutral') or 'neutral') == regime
-            and _trade_setup_mode(t) == setup_mode
-        ]
-        mid_session_rows = [t for t in mid_rows if str(t.get('session_bucket') or '') == current_session_bucket]
-        global_rows = [t for t in all_rows if _trade_setup_mode(t) == setup_mode]
-        global_session_rows = [t for t in global_rows if str(t.get('session_bucket') or '') == current_session_bucket]
-        if regime == 'range':
-            global_rows = [t for t in global_rows if str((t.get('breakdown') or {}).get('Regime', 'neutral') or 'neutral') in ('range', 'neutral')]
-        elif regime in ('news', 'breakout'):
-            global_rows = [t for t in global_rows if str((t.get('breakdown') or {}).get('Regime', 'neutral') or 'neutral') in ('news', 'breakout', 'trend')]
-        elif regime == 'trend':
-            global_rows = [t for t in global_rows if str((t.get('breakdown') or {}).get('Regime', 'neutral') or 'neutral') in ('trend', 'neutral')]
-        if len(global_rows) < 10:
-            global_rows = list(all_rows)
-
-        local_stats = _compute_stats_from_rows(local_rows)
-        mid_stats = _compute_stats_from_rows(mid_rows)
-        global_stats = _compute_stats_from_rows(global_rows)
-        symbol_stats = _live_trade_stats(symbol=symbol, regime=None)
-
-        local_cnt = int(local_stats.get('count', 0) or 0)
-        mid_cnt = int(mid_stats.get('count', 0) or 0)
-        global_cnt = int(global_stats.get('count', 0) or 0)
-        trusted_local_cnt = len([t for t in trusted_rows if str(t.get('symbol') or '') == symbol and str((t.get('breakdown') or {}).get('Regime', 'neutral') or 'neutral') == regime and _trade_setup_mode(t) == setup_mode])
-
-        local_session_stats = _compute_stats_from_rows(local_session_rows)
-        mid_session_stats = _compute_stats_from_rows(mid_session_rows)
-        global_session_stats = _compute_stats_from_rows(global_session_rows)
-        if int(local_session_stats.get('count', 0) or 0) >= 5:
-            stats = local_session_stats
-            fallback_level = 'local_session'
-            fallback_desc = '灞€閮ㄦ檪娈?
-            fallback_detail = f'{symbol}|{regime}|{setup_mode}|{current_session_bucket}'
-        elif local_cnt >= 8:
-            stats = local_stats
-            fallback_level = 'local'
-            fallback_desc = '灞€閮?
-            fallback_detail = f'{symbol}|{regime}|{setup_mode}'
-        elif int(mid_session_stats.get('count', 0) or 0) >= 8:
-            stats = mid_session_stats
-            fallback_level = 'mid_session'
-            fallback_desc = '涓堡鏅傛'
-            fallback_detail = f'{regime}|{setup_mode}|{current_session_bucket}'
-        elif mid_cnt >= 12:
-            stats = mid_stats
-            fallback_level = 'mid'
-            fallback_desc = '涓堡'
-            fallback_detail = f'{regime}|{setup_mode}'
-        elif int(global_session_stats.get('count', 0) or 0) >= 10:
-            stats = global_session_stats
-            fallback_level = 'global_session'
-            fallback_desc = '鍏ㄥ煙鏅傛'
-            fallback_detail = f'live_all|{current_session_bucket}'
-        else:
-            stats = global_stats
-            fallback_level = 'global'
-            fallback_desc = '鍏ㄥ煙'
-            fallback_detail = 'live_all'
-
-        cnt = int(stats.get('count', 0) or 0)
-        wr = float(stats.get('win_rate', 0) or 0)
-        avg = float(stats.get('avg_pnl', 0) or 0)
-        ev = float(stats.get('ev_per_trade', 0) or 0)
-        pf = stats.get('profit_factor', None)
-        dd = stats.get('max_drawdown_pct', None)
-        conf = _ai_confidence_from_live(stats)
-        status = _ai_status_from_live(stats)
-        effective_count = float(stats.get('effective_count', cnt) or cnt)
-
-        source_weight = {'local_session': 1.08, 'local': 1.0, 'mid_session': 0.82, 'mid': 0.7, 'global_session': 0.52, 'global': 0.4}.get(fallback_level, 0.4)
-        conf = round(conf * source_weight, 3)
-        suppress = recent_setup_loss_streak(all_rows, symbol=symbol, regime=regime, setup=setup)
-        loss_streak = int(suppress.get('loss_streak', 0) or 0)
-        if loss_streak >= 3:
-            conf = round(conf * float(suppress.get('suppress_mult', 0.5) or 0.5), 3)
-
-        phase = phase_from_counts(global_cnt, local_cnt, effective_count)
-
-        profile.update({
-            'sample_count': cnt,
-            'win_rate': wr,
-            'avg_pnl': avg,
-            'ev_per_trade': ev,
-            'profit_factor': pf,
-            'max_drawdown_pct': dd,
-            'confidence': conf,
-            'status': status,
-            'source': f'live_only:{fallback_level}',
-            'effective_count': round(effective_count, 2),
-            'loss_streak': loss_streak,
-            'phase': phase,
-            'trusted_local_count': trusted_local_cnt,
-            'local_count': local_cnt,
-            'mid_count': mid_cnt,
-            'global_count': global_cnt,
-            'soft_live_count': len(soft_rows),
-            'trusted_live_count': len(trusted_rows),
-            'bootstrap_live_count': len(all_rows),
-            'strongest_local_count': max(local_cnt, trusted_local_cnt),
-            'fallback_level': fallback_level,
-            'quarantine_count': len(quarantine_rows),
-            'ready': (
-                not sym_block and status in ('valid', 'observe') and ((phase == 'full' and conf >= 0.22) or (fallback_level in ('mid', 'global', 'global_session') and effective_count >= 12 and conf >= 0.16))
-            ),
-            'symbol_blocked': sym_block,
-            'strategy_blocked': strat_block,
-            'source_weight': source_weight,
-        })
-
-        notes = [f'涓夊堡鍥為€€:{fallback_desc}', f'渚濇摎:{fallback_detail}', f'鐣跺墠鏅傛:{current_session_bucket}']
-        notes.append(f'灞€閮▄local_cnt}锝滀腑灞mid_cnt}锝滃叏鍩焮global_cnt}')
-        notes.append(f'鍙俊灞€閮▄trusted_local_cnt}锝渂ootstrap{len(all_rows)}锝渟oft{len(soft_rows)}锝滈殧闆len(quarantine_rows)}')
-        notes.append(f'phase:{phase}')
-        notes.append(f'鏈夋晥妯ｆ湰{effective_count:.1f}')
-
-        if sym_block:
-            profile['hard_block'] = True
-            profile['threshold_adjust'] = 999.0
-            notes.append(sym_note or '骞ｇó闀锋湡铏ф悕灏侀帠')
-        elif strat_block:
-            profile['hard_block'] = True
-            profile['threshold_adjust'] = 999.0
-            notes.append(strat_note or '绛栫暐闀锋湡鍋忓急灏侀帠')
-        elif status == 'reject':
-            profile['hard_block'] = False
-            profile['threshold_adjust'] = 4.5
-            notes.append('AI寮卞嫝绛栫暐锛屽崌楂橀杸妾昏瀵?)
-            if pf is not None:
-                notes.append(f'PF鍋忓急 {float(pf):.2f}')
-            notes.append(f'EV鍋忓急 {ev:+.4f}')
-        elif status == 'warmup':
-            profile['threshold_adjust'] = -6.0 if fallback_level != 'global' else -2.5
-            notes.append('鎺㈢储妯″紡')
-            notes.append(f'妯ｆ湰 {cnt}/{TREND_AI_SEMI_TRADES}')
-            if fallback_level == 'global':
-                notes.append('灞€閮ㄤ笉瓒筹紝鏆€熷叏鍩熺稉椹?)
-            elif fallback_level == 'mid':
-                notes.append('灞€閮ㄤ笉瓒筹紝鏆€熶腑灞ょ稉椹?)
-            else:
-                notes.append(f'鍓峽TREND_AI_SEMI_TRADES}鍠劒鍏堢疮绌嶅鍠?)
-        elif status == 'observe':
-            profile['threshold_adjust'] = -1.5 if fit_ok else 1.0
-            if fallback_level == 'global':
-                profile['threshold_adjust'] += 1.0
-            elif fallback_level == 'mid':
-                profile['threshold_adjust'] += 0.5
-            notes.append('鍗婃帴绠℃ā寮?)
-            notes.append(f'妯ｆ湰 {cnt}/{TREND_AI_FULL_TRADES}')
-            if not fit_ok:
-                notes.append(fit_note)
-        else:
-            th_adj = 0.0
-            if pf is not None and pf >= 1.35:
-                th_adj -= 2.0
-            elif pf is not None and pf < 1.08:
-                th_adj += 3.0
-            if ev >= 0.12:
-                th_adj -= 1.5
-            elif ev <= 0:
-                th_adj += 2.5
-            if wr >= 58:
-                th_adj -= 1.0
-            elif wr < 42:
-                th_adj += 1.8
-            if dd is not None and dd >= 10:
-                th_adj += 2.0
-            elif dd is not None and dd <= 3:
-                th_adj -= 0.5
-            if fallback_level == 'global':
-                th_adj += 1.5
-                notes.append('鍏ㄥ煙鍥為€€锛屼繚瀹堥亷婵?)
-            elif fallback_level == 'mid':
-                th_adj += 0.5
-                notes.append('涓堡鍥為€€')
-            else:
-                notes.append('灞€閮ㄦ帴绠?)
-            if not fit_ok:
-                th_adj += 2.5
-                notes.append(fit_note)
-            else:
-                notes.append(fit_note)
-            if setup_mode == 'breakout':
-                th_adj += 1.0
-                notes.append('鐖嗙櫦绛栫暐淇濆畧閬庢烤')
-            elif setup_mode == 'range':
-                th_adj += 0.5 if regime != 'range' else -0.5
-                notes.append('鍗€闁撶瓥鐣?)
-            else:
-                notes.append('瓒ㄥ嫝涓荤瓥鐣?)
-            scnt = int(symbol_stats.get('count', 0) or 0)
-            swr = float(symbol_stats.get('win_rate', 0) or 0)
-            if scnt >= SYMBOL_BLOCK_MIN_TRADES and swr < SYMBOL_BLOCK_MIN_WINRATE:
-                th_adj += 1.5
-                notes.append('骞ｇó瀵﹀柈鍋忓急')
-            profile['threshold_adjust'] = round(th_adj, 2)
-
-        if loss_streak >= 3:
-            profile['threshold_adjust'] = round(float(profile.get('threshold_adjust', 0) or 0) + 3.0, 2)
-            notes.append(f'閫ｈ櫑鎶戝埗 x{float(suppress.get('suppress_mult', 0.5) or 0.5):.2f}')
-            notes.append(f'鍚?setup 閫ｈ櫑 {loss_streak} 绛?)
-
-        notes.append(f'EV/绛?{ev:+.4f}')
-        if pf is not None:
-            notes.append(f'PF {float(pf):.2f}')
-        if dd is not None:
-            notes.append(f'DD {float(dd):.2f}%')
-        notes.append(f'淇″績 {conf*100:.0f}%')
-        profile['note'] = '锝?.join(notes)
-    except Exception as e:
-        profile['note'] = f'AI绛栫暐璁€鍙栧け鏁?{str(e)[:40]}'
-    return profile
-
 def ai_decide_trade(sig, eff_threshold, mkt_ok, side_ok, same_dir_cnt, pos_syms, already_closing):
     symbol = str(sig.get('symbol') or '')
     score = abs(float(sig.get('score', 0) or 0))
@@ -3202,12 +2692,12 @@ def ai_decide_trade(sig, eff_threshold, mkt_ok, side_ok, same_dir_cnt, pos_syms,
         base_ok = all(gating.get(k, True) for k in DECISION_PRIORITY_ORDER) and gating.get('calibrated_winrate', True) and gating.get('positive_ev', True)
         ai_ok = True
         reasons = []
-        reasons.append({'learning': '鎺㈢储妯″紡', 'semi': '鍗婃帴绠?, 'full': 'AI鐪熸帴绠?}[phase])
-        reasons.append(str(growth_control.get('note') or 'AI鎴愰暦淇濊'))
-        reasons.append('AI鍏ㄦ帶鍒嗗暉鐢?)
-        reasons.append('姹虹瓥鍎厛搴?' + '>'.join(DECISION_PRIORITY_ORDER))
-        reasons.append(f'鍏ㄥ煙妯ｆ湰 {global_live_count}')
-        reasons.append(f'AI瑕嗚搵鐜?{ai_cov:.2f}')
+        reasons.append({'learning': '????', 'semi': '???', 'full': 'AI???'}[phase])
+        reasons.append(str(growth_control.get('note') or 'AI????'))
+        reasons.append('AI??????')
+        reasons.append('?????>' + '>'.join(DECISION_PRIORITY_ORDER))
+        reasons.append(f'???? {global_live_count}')
+        reasons.append(f'AI??? {ai_cov:.2f}')
         reasons.append(f'AI鐗瑰镜妯ｆ湰 {ai_scnt}')
         reasons.append(f'甯傚牬鐙€鎱?{market_state} conf {market_state_conf:.2f}')
         if market_profile.get('note'):
@@ -3221,12 +2711,12 @@ def ai_decide_trade(sig, eff_threshold, mkt_ok, side_ok, same_dir_cnt, pos_syms,
             ai_ok = False
             reasons.append('绛栫暐闀锋湡铏ф悕灏侀帠')
         if not fit_ok:
-            reasons.append('绲愭涓嶅畬缇庝絾鍍呬綔AI杓斿姪鍙冭€?)
+            reasons.append('型態不完全吻合，僅作 AI 輔助參考')
             reasons.append(fit_note)
         if not bool(sig.get('anti_chase_ok', True)):
             reasons.append('杩藉児棰ㄩ毆淇濈暀鐐篈I杓斿姪鐗瑰镜')
         if profile.get('ready'):
-            reasons.append('AI绛栫暐宸插氨绶?)
+            reasons.append('AI 策略資料已就緒')
         if profile.get('note'):
             reasons.append(str(profile.get('note')))
         if eq_note:
@@ -3236,7 +2726,7 @@ def ai_decide_trade(sig, eff_threshold, mkt_ok, side_ok, same_dir_cnt, pos_syms,
         reasons.append('鏍℃簴EV {:+.3f}'.format(ev_est))
         if not base_ok:
             if effective_score < ai_threshold:
-                reasons.append('AI缍滃悎鍒嗘暩鏈亷闁€妾?)
+                reasons.append('AI 綜合分數未達門檻')
             if not gating.get('calibrated_winrate', True):
                 reasons.append('鏍℃簴鍕濈巼涓嶈冻')
             if not gating.get('positive_ev', True):
@@ -3341,75 +2831,75 @@ def ai_decide_trade(sig, eff_threshold, mkt_ok, side_ok, same_dir_cnt, pos_syms,
 
     ai_ok = True
     reasons = []
-    reasons.append({'learning': '鎺㈢储妯″紡', 'semi': '鍗婃帴绠?, 'full': 'AI鐪熸帴绠?}[phase])
-    reasons.append(str(growth_control.get('note') or 'AI鎴愰暦淇濊'))
-    reasons.append('姹虹瓥鍎厛搴?' + '>'.join(DECISION_PRIORITY_ORDER))
-    reasons.append('鍥炴脯鍙緵鍊欓伕鎺掑簭')
-    reasons.append(f'鍏ㄥ煙妯ｆ湰 {global_live_count}')
+    reasons.append({'learning': '學習階段', 'semi': '半自動階段', 'full': 'AI 輔助階段'}.get(phase, '策略階段'))
+    reasons.append(str(growth_control.get('note') or '本地 AI 學習已停用'))
+    reasons.append('決策順序>' + '>'.join(DECISION_PRIORITY_ORDER))
+    reasons.append('本地策略學習已停用')
+    reasons.append(f'???? {global_live_count}')
     if rotation_notes:
         reasons.extend(rotation_notes)
 
     if phase == 'learning':
-        reasons.append(f'鍓峽TREND_AI_SEMI_TRADES}鍠劒鍏堢疮绌嶅鍠?)
+        reasons.append(f'本地 AI 學習已停用；樣本門檻 {TREND_AI_SEMI_TRADES}')
         if profile.get('sample_count') is not None:
-            reasons.append('AI妯ｆ湰{}'.format(profile.get('sample_count', 0)))
+            reasons.append('AI 樣本 {}'.format(profile.get('sample_count', 0)))
         if profile.get('note'):
             reasons.append(str(profile.get('note')))
     elif phase == 'semi':
         if bool(profile.get('symbol_blocked')):
             ai_ok = False
-            reasons.append('骞ｇó闀锋湡铏ф悕灏侀帠')
+            reasons.append('此幣種被策略封鎖')
         elif bool(profile.get('strategy_blocked')):
-            ai_ok = False
-            reasons.append('绛栫暐闀锋湡铏ф悕灏侀帠')
+            reasons.append('策略規則目前封鎖')
+            reasons.append('本地策略學習已停用')
         elif int(profile.get('sample_count', 0) or 0) >= TREND_AI_SEMI_TRADES and float(profile.get('avg_pnl', 0) or 0) <= 0 and float(profile.get('win_rate', 0) or 0) < 45:
             ai_ok = False
-            reasons.append('鍗婃帴绠″皝閹栬櫑鎼嶇瓥鐣?)
+            reasons.append('本地歷史樣本不支持')
         elif not fit_ok and mode in ('breakout', 'trend'):
             ai_ok = False
             reasons.append(fit_note)
         if profile.get('sample_count') is not None:
-            reasons.append('AI妯ｆ湰{}'.format(profile.get('sample_count', 0)))
+            reasons.append('AI 樣本 {}'.format(profile.get('sample_count', 0)))
         if profile.get('note'):
             reasons.append(str(profile.get('note')))
     else:
         hard_block = bool(profile.get('hard_block'))
         if NEUTRAL_REGIME_BLOCK and regime == 'neutral':
-            reasons.append('涓€х洡浣庡€変綅鏀捐')
+            reasons.append('中性市況降低優先度')
         if not fit_ok:
             reasons.append(fit_note)
         if int(profile.get('sample_count', 0) or 0) < AI_MIN_SAMPLE_EFFECT and score < max(ai_threshold + 8.0, 62.0):
-            reasons.append('灞€閮ㄦǎ鏈笉瓒筹紝鍍呴檷娆婁笉纭搵')
+            reasons.append('本地樣本不足，僅作輔助參考')
         ai_ok = not hard_block
         if profile.get('ready'):
-            reasons.append('AI绛栫暐宸插氨绶?)
+            reasons.append('AI 策略資料已就緒')
         else:
-            reasons.append('AI鏈畬鍏ㄥ氨绶掞紝缍寔淇濆畧')
+            reasons.append('AI 策略資料未就緒，維持保守')
         if profile.get('sample_count') is not None:
-            reasons.append('AI妯ｆ湰{}'.format(profile.get('sample_count', 0)))
+            reasons.append('AI 樣本 {}'.format(profile.get('sample_count', 0)))
         if profile.get('note'):
             reasons.append(str(profile.get('note')))
 
-    reasons.append(f'甯傚牬鐙€鎱?{market_state} conf {market_state_conf:.2f}')
+    reasons.append(f'市場狀態 {market_state} conf {market_state_conf:.2f}')
     if market_profile.get('note'):
         reasons.append(str(market_profile.get('note')))
     if eq_note:
         reasons.append(eq_note)
-    reasons.append('AI鍒嗘暩瑾挎暣 {:+.2f}'.format(ai_score_adj))
-    reasons.append('鏍℃簴鍕濈巼 {:.1f}%'.format(float(decision_calibrator.get('p_win_est', 0.0) or 0.0) * 100.0))
-    reasons.append('鏍℃簴EV {:+.3f}'.format(float(decision_calibrator.get('expected_value_est', 0.0) or 0.0)))
+    reasons.append('AI 分數調整 {:+.2f}'.format(ai_score_adj))
+    reasons.append('校準勝率 {:.1f}%'.format(float(decision_calibrator.get('p_win_est', 0.0) or 0.0) * 100.0))
+    reasons.append('校準EV {:+.3f}'.format(float(decision_calibrator.get('expected_value_est', 0.0) or 0.0)))
 
     if not base_ok:
         if effective_score < ai_threshold:
-            reasons.append('鍒嗘暩鏈亷AI闁€妾?)
+            reasons.append('分數未達 AI 門檻')
         if eq < min_entry_quality:
-            reasons.append('閫插牬鍝佽唱涓嶈冻')
+            reasons.append('進場品質不足')
         if rr < rr_floor:
-            reasons.append('RR涓嶈冻')
+            reasons.append('RR 不足')
         if not gating.get('calibrated_winrate', True):
-            reasons.append('鏍℃簴鍕濈巼涓嶈冻')
+            reasons.append('校準勝率不足')
         if not gating.get('positive_ev', True):
-            reasons.append('鏍℃簴EV涓嶈冻')
+            reasons.append('校準 EV 不足')
     normalized = normalize_decision_summary(
         allow_now=bool(base_ok and ai_ok),
         gating=gating,
@@ -3436,35 +2926,35 @@ def ai_decide_trade(sig, eff_threshold, mkt_ok, side_ok, same_dir_cnt, pos_syms,
 def build_auto_order_reason(sig, eff_threshold, mkt_ok, side_ok, same_dir_cnt, pos_syms, already_closing, ai_decision=None):
     reasons = []
     if not side_ok:
-        reasons.append('鏂瑰悜琛濈獊')
+        reasons.append('方向衝突')
     if sig['symbol'] in pos_syms:
-        reasons.append('宸叉湁鎸佸€?)
+        reasons.append('已有持倉')
     if sig['symbol'] in already_closing:
-        reasons.append('鍙嶅悜骞冲€変腑')
+        reasons.append('反向平倉中')
     if sig['symbol'] in SHORT_TERM_EXCLUDED:
-        reasons.append('鐭窔鎺掗櫎鍚嶅柈')
+        reasons.append('短期排除名單')
     if not sig.get('allowed', True):
-        reasons.append('姝峰彶鍕濈巼灏侀帠')
+        reasons.append('歷史風控封鎖')
     if not mkt_ok:
-        reasons.append('澶х洡鏂瑰悜涓嶇')
+        reasons.append('大盤方向不一致')
     if same_dir_cnt >= MAX_SAME_DIRECTION:
-        reasons.append('鍚屽悜鎸佸€夊凡婊?)
+        reasons.append('同方向持倉已滿')
     if not can_reenter_symbol(sig['symbol']):
-        reasons.append(get_symbol_cooldown_note(sig['symbol']) or '閫插牬鍐峰嵒涓?)
+        reasons.append(get_symbol_cooldown_note(sig['symbol']) or '該幣種冷卻中')
     if AI_FULL_SCORE_CONTROL:
-        reasons.append('鑸奟R/閫插牬鍝佽唱/鍨嬫厠鍏紡宸茶綁鐐篈I杓斿姪鐗瑰镜')
+        reasons.append('RR、進場品質與結構已納入 AI 輔助')
     if ai_decision:
         profile = dict(ai_decision.get('profile') or {})
-        reasons.append('AI鏈夋晥鍒嗘暩 {}'.format(ai_decision.get('effective_score')))
-        reasons.append('AI闁€妾?{}'.format(ai_decision.get('effective_threshold')))
+        reasons.append('AI 有效分數 {}'.format(ai_decision.get('effective_score')))
+        reasons.append('AI 門檻 {}'.format(ai_decision.get('effective_threshold')))
         if profile.get('sample_count') is not None:
-            reasons.append('AI妯ｆ湰 {}'.format(profile.get('sample_count', 0)))
+            reasons.append('AI 樣本 {}'.format(profile.get('sample_count', 0)))
         dc = dict(ai_decision.get('decision_calibrator') or {})
         if dc:
-            reasons.append('AI鍕濈巼 {:.1f}%'.format(float(dc.get('p_win_est', 0.0) or 0.0) * 100.0))
-            reasons.append('AIEV {:+.3f}'.format(float(dc.get('expected_value_est', 0.0) or 0.0)))
+            reasons.append('AI 勝率 {:.1f}%'.format(float(dc.get('p_win_est', 0.0) or 0.0) * 100.0))
+            reasons.append('AI EV {:+.3f}'.format(float(dc.get('expected_value_est', 0.0) or 0.0)))
         if profile.get('hard_block'):
-            reasons.append('AI灏侀帠姝ょ瓥鐣?)
+            reasons.append('AI 封鎖此策略')
         note = profile.get('note')
         if note:
             reasons.append(str(note))
@@ -3482,7 +2972,7 @@ def coin_selection_edge(sig):
         regime = str(sig.get('regime') or bd.get('Regime') or 'neutral')
         setup = str(sig.get('setup_label') or bd.get('Setup') or '')
         regime_conf = float(sig.get('regime_confidence', bd.get('RegimeConf', bd.get('RegimeConfidence', 0))) or 0)
-        trend_conf = float(sig.get('trend_confidence', bd.get('TrendConfidence', bd.get('鏂瑰悜淇″績', 0))) or 0)
+        trend_conf = float(sig.get('trend_confidence', bd.get('TrendConfidence', bd.get('????', 0))) or 0)
         regime_bias = float(sig.get('regime_bias', bd.get('RegimeBias', 0)) or 0)
         chase = float(bd.get('杩藉児棰ㄩ毆', bd.get('ChaseRisk', 0)) or 0)
         vol_ratio = float(bd.get('VolRatio', bd.get('volume_ratio', 1.0)) or 1.0)
@@ -3668,33 +3158,33 @@ def analyze_pre_breakout_setup(d15, d4h):
 
         if squeeze and near_high and lows_slope > 0 and trend_up:
             score += 6
-            tags.append("鏀舵杺閫艰繎鍓嶉珮")
+            tags.append("收斂逼近前高")
             if vol_expand:
                 score += 2
-                tags.append("閲忚兘鎮勬倓鏀惧ぇ")
+                tags.append("量能悄悄放大")
         elif squeeze and near_low and highs_slope < 0 and trend_dn:
             score -= 6
-            tags.append("鏀舵杺閫艰繎鍓嶄綆")
+            tags.append("收斂逼近前低")
             if vol_expand:
                 score -= 2
-                tags.append("閲忚兘鎮勬倓鏀惧ぇ")
+                tags.append("量能悄悄放大")
 
         # 鍋囩獊鐮村墠鐨勫惛鏀讹細鍍规牸寰堟帴杩戝墠楂?鍓嶄綆锛屼絾灏氭湭澶у箙绌胯秺
         last_body = abs(float(c.iloc[-1]) - float(d15['o'].iloc[-1]))
         if near_high and trend_up and last_body < atr_now * 0.75 and curr <= range_high * 1.0015:
             score += 1
-            tags.append("涓婃部鍚告敹涓?)
+            tags.append("上部吸收中")
         elif near_low and trend_dn and last_body < atr_now * 0.75 and curr >= range_low * 0.9985:
             score -= 1
-            tags.append("涓嬫部鍚告敹涓?)
+            tags.append("下部吸收中")
 
         score = max(min(score, 8), -8)
-        return score, "|".join(tags) if tags else "鐒℃槑椤搫鍕?
+        return score, "|".join(tags) if tags else "無明顯型態"
     except Exception:
-        return 0, "钃勫嫝鍒嗘瀽澶辨晽"
+        return 0, "型態分析失敗"
 
 def analyze_extension_risk(d15, direction_hint=0):
-    """閬垮厤杩芥疾娈鸿穼锛氬凡闆㈠潎绶氬お閬?+ 閫ｇ簩鍠倞琛濆埡鏅傜洿鎺ラ檷娆娿€?""
+    # 避免在過度延伸時追價下單。
     try:
         c = d15['c'].astype(float)
         o = d15['o'].astype(float)
@@ -3712,21 +3202,21 @@ def analyze_extension_risk(d15, direction_hint=0):
 
         if direction_hint >= 0 and ext > ANTI_CHASE_ATR and curr >= bb_up * 0.995 and bull3:
             penalty = -10 if ext > 1.9 else -7
-            return penalty, "澶氶牠閬庡害寤朵几锛岄伩鍏嶈拷楂?
+            return penalty, "多頭延伸過度，避免追高"
         if direction_hint <= 0 and ext < -ANTI_CHASE_ATR and curr <= bb_low * 1.005 and bear3:
             penalty = 10 if ext < -1.9 else 7
-            return penalty, "绌洪牠閬庡害寤朵几锛岄伩鍏嶈拷绌?
-        return 0, "寤朵几姝ｅ父"
+            return penalty, "空頭延伸過度，避免追空"
+        return 0, "延伸正常"
     except Exception:
-        return 0, "寤朵几鍒嗘瀽澶辨晽"
+        return 0, "延伸分析失敗"
 
 def get_breakout_pullback_entry(symbol, side, current_price, atr):
-    """
-    杩藉児淇濊锛氬凡缍撻洟鍧囩窔/鍗€闁撳お閬犳檪锛屼笉鐩存帴甯傚児锛屾敼绛夊洖韪?鍙嶅綀銆?    """
+    """Prefer pullback entries instead of chasing stretched breakouts."""
+    # 追價保護：已經離均線或區間太遠時，不直接市價追進，改等回踩或反彈。
     try:
         df = pd.DataFrame(exchange.fetch_ohlcv(symbol, '15m', limit=80), columns=['t','o','h','l','c','v'])
         if df.empty or len(df) < 30:
-            return None, "pullback璩囨枡涓嶈冻"
+            return None, "pullback 資料不足"
         c = df['c'].astype(float)
         o = df['o'].astype(float)
         h = df['h'].astype(float)
@@ -3744,21 +3234,21 @@ def get_breakout_pullback_entry(symbol, side, current_price, atr):
             if ext > ANTI_CHASE_ATR or breakout_now:
                 limit_price = max(ema20, hh - atr * PULLBACK_BUFFER_ATR)
                 if limit_price < curr * 0.999:
-                    return round(limit_price, 6), "杩介珮淇濊锛氭敼绛夊洖韪╁啀澶?
+                    return round(limit_price, 6), "追高保護：改等回踩再多"
         else:
             breakout_now = curr <= ll * 1.001 and last_body > atr * 0.7
             if ext < -ANTI_CHASE_ATR or breakout_now:
                 limit_price = min(ema20, ll + atr * PULLBACK_BUFFER_ATR)
                 if limit_price > curr * 1.001:
-                    return round(limit_price, 6), "杩界┖淇濊锛氭敼绛夊弽褰堝啀绌?
-        return None, "寤朵几姝ｅ父"
+                    return round(limit_price, 6), "追空保護：改等反彈再空"
+        return None, "延伸正常"
     except Exception:
-        return None, "pullback瑷堢畻澶辨晽"
+        return None, "pullback 計算失敗"
 
 # =====================================================
 # 绲辫▓婵剧恫锛氳┎骞ｅ嫕鐜囨槸鍚﹂仈妯?# =====================================================
 def is_symbol_allowed(symbol):
-    """鑻ヨ┎骞ｅ鍠凡瓒呴亷10绛嗕笖鍕濈巼 <40%锛屽皝閹栦笅鍠紝鏀圭偤瑙€瀵?""
+    # 若空窗掛單過久且品質過差，封鎖後續觀察。
     with LEARN_LOCK:
         st = LEARN_DB.get("symbol_stats", {}).get(symbol, {})
     n = int(st.get("count", 0) or 0)
@@ -3767,17 +3257,17 @@ def is_symbol_allowed(symbol):
     return wr >= SYMBOL_BLOCK_MIN_WINRATE, n, round(wr, 1)
 
 # =====================================================
-# ADX锛氳定鍕㈠挤搴?# =====================================================
+# ADX: trend strength analysis
 def analyze_adx(df):
     try:
         adx_df = ta.adx(df['h'], df['l'], df['c'], length=14)
         if adx_df is None or adx_df.empty:
-            return 0, "ADX鐒℃暩鎿?
+            return 0, "ADX 無資料"
         adx_val = safe_last(adx_df['ADX_14'], 0)
         dmp     = safe_last(adx_df['DMP_14'], 0)
         dmn     = safe_last(adx_df['DMN_14'], 0)
         score = 0; tag = "ADX{:.0f}".format(adx_val)
-        # 娉ㄦ剰锛氭鍑芥暩鐢?analyze() 鍛煎彨锛岄€忛亷 symbol 鍒ゆ柗涓绘祦/灞卞
+        # This signal is used by analyze() to judge trend strength and direction
         if adx_val > 30:
             score = W["adx"] if dmp > dmn else -W["adx"]
             tag  += "(寮峰)" if dmp > dmn else "(寮风┖)"
@@ -3794,128 +3284,42 @@ def analyze_adx(df):
 # VWAP锛氱浉灏嶄綅缃?# =====================================================
 def analyze_vwap(df):
     try:
-        # 鎵嬪嫊瑷堢畻 VWAP锛屽畬鍏ㄤ笉闇€瑕?DatetimeIndex
+        # Manually compute VWAP so we do not depend on a DatetimeIndex
         tp = (df['h'] + df['l'] + df['c']) / 3
         vwap_val = float((tp * df['v']).sum() / df['v'].sum())
         curr = float(df['c'].iloc[-1])
         if vwap_val <= 0:
-            return 0, "VWAP鐒℃暩鎿?
+            return 0, "VWAP 無資料"
         dist_pct = (curr - vwap_val) / vwap_val * 100
         if dist_pct > 1.0:
-            return W["vwap"], "VWAP涓婃柟{:.1f}%".format(dist_pct)
+            return W["vwap"], "VWAP 上方 {:.1f}%".format(dist_pct)
         elif dist_pct < -1.0:
-            return -W["vwap"], "VWAP涓嬫柟{:.1f}%".format(abs(dist_pct))
+            return -W["vwap"], "VWAP 下方 {:.1f}%".format(abs(dist_pct))
         elif dist_pct > 0.2:
-            return W["vwap"]//2, "鎺ヨ繎VWAP涓婃柟"
+            return W["vwap"]//2, "接近 VWAP 上方"
         elif dist_pct < -0.2:
-            return -W["vwap"]//2, "鎺ヨ繎VWAP涓嬫柟"
+            return -W["vwap"]//2, "接近 VWAP 下方"
         else:
-            return 0, "VWAP涓€?
+            return 0, "VWAP 附近"
     except:
-        return 0, "VWAP澶辨晽"
+        return 0, "VWAP 分析失敗"
 
 # =====================================================
-# Order Block锛氭妲嬪崁鍩熷伒娓?# =====================================================
+# Order Block: supply / demand zone analysis
 # =====================================================
-# ICT 姒傚康锛欱OS / CHoCH / 绺噺鍥炶
+# ICT concepts: BOS / CHoCH / pullback structure
 # =====================================================
 # =====================================================
 # FVG (Fair Value Gap / 鍚堢悊鍍规牸缂哄彛)
 # =====================================================
 def analyze_fvg(df):
-    """
-    FVG 鏄?SMC/ICT 鏍稿績姒傚康锛?    - 涓夋牴K妫掞紝涓枔閭ｆ牴鐨勪笂涓嬪奖绶氱暀涓嬬己鍙?    - 鍋氬FVG锛欿1鏈€楂?< K3鏈€浣庯紙鍚戜笂璺崇┖缂哄彛锛?    - 鍋氱┖FVG锛欿1鏈€浣?> K3鏈€楂橈紙鍚戜笅璺崇┖缂哄彛锛?    - 鍍规牸鍥炲埌 FVG 鍗€鍩?= 楂樻鐜囧弽杞夐粸
-    - 閰嶅悎 OB 浣跨敤鏅備俊铏熸洿寮凤紙SMC鍏ュ牬鏍稿績锛?    """
+    # 本地 FVG/SMC 分析已停用，避免本地亂碼與本地 AI 干擾主流程。
     try:
-        hi = df['h'].tolist()
-        lo = df['l'].tolist()
-        cl = df['c'].tolist()
-        n  = len(cl)
-        curr = cl[-1]
-        score = 0; tags = []
-
-        # 鎺冩弿鏈€杩?0鏍筀妫掓壘鏈～瑁滅殑FVG
-        bullish_fvgs = []  # 鍋氬缂哄彛锛堟敮鎾愶級
-        bearish_fvgs = []  # 鍋氱┖缂哄彛锛堝鍔涳級
-
-        for i in range(2, min(30, n)):
-            idx = n - 1 - i  # 寰炴渶杩戝線鍓嶆巸
-            if idx < 2:
-                break
-
-            k1_h = hi[idx-2]; k1_l = lo[idx-2]
-            k2_h = hi[idx-1]; k2_l = lo[idx-1]
-            k3_h = hi[idx];   k3_l = lo[idx]
-
-            # 鍋氬FVG锛欿1鏈€楂?< K3鏈€浣庯紙涓婂崌缂哄彛锛?            if k1_h < k3_l:
-                gap_top    = k3_l
-                gap_bottom = k1_h
-                gap_size   = gap_top - gap_bottom
-
-                # 妾㈡煡鏄惁宸茶濉
-                filled = any(lo[j] <= gap_top and hi[j] >= gap_bottom
-                             for j in range(idx+1, n))
-                if not filled and gap_size > 0:
-                    bullish_fvgs.append({
-                        "top": gap_top,
-                        "bottom": gap_bottom,
-                        "size": gap_size,
-                        "age": i  # 骞炬牴K妫掑墠
-                    })
-
-            # 鍋氱┖FVG锛欿1鏈€浣?> K3鏈€楂橈紙涓嬮檷缂哄彛锛?            elif k1_l > k3_h:
-                gap_top    = k1_l
-                gap_bottom = k3_h
-                gap_size   = gap_top - gap_bottom
-
-                filled = any(hi[j] >= gap_bottom and lo[j] <= gap_top
-                             for j in range(idx+1, n))
-                if not filled and gap_size > 0:
-                    bearish_fvgs.append({
-                        "top": gap_top,
-                        "bottom": gap_bottom,
-                        "size": gap_size,
-                        "age": i
-                    })
-
-        # 鍒ゆ柗鐣跺墠鍍规牸鏄惁鍦?FVG 鍗€鍩熷収
-        W_FVG = W.get("bos_choch", 7)  # 鍏辩敤 ICT 椤炲垎鏁?
-        for fvg in bullish_fvgs[:3]:  # 鍙湅鏈€杩?鍊?            if fvg["bottom"] <= curr <= fvg["top"]:
-                # 鍍规牸鍥炲埌鍋氬FVG鍗€鍩?鈫?鐪嬪
-                freshness = max(1.0 - fvg["age"] / 30, 0.3)  # 瓒婃柊瓒婇噸瑕?                pts = round(W_FVG * freshness)
-                score += pts
-                tags.append("FVG鍋氬缂哄彛({:.4f}-{:.4f})".format(
-                    fvg["bottom"], fvg["top"]))
-                break
-
-        for fvg in bearish_fvgs[:3]:
-            if fvg["bottom"] <= curr <= fvg["top"]:
-                # 鍍规牸鍥炲埌鍋氱┖FVG鍗€鍩?鈫?鐪嬬┖
-                freshness = max(1.0 - fvg["age"] / 30, 0.3)
-                pts = round(W_FVG * freshness)
-                score -= pts
-                tags.append("FVG鍋氱┖缂哄彛({:.4f}-{:.4f})".format(
-                    fvg["bottom"], fvg["top"]))
-                break
-
-        # 鍍规牸鎺ヨ繎浣嗛倓娌掑埌FVG锛堥爯鏈熷洖鎾わ級
-        if not tags:
-            for fvg in bullish_fvgs[:2]:
-                dist = (curr - fvg["top"]) / max(curr, 1e-9)
-                if 0 < dist < 0.02:  # 璺濋洟缂哄彛闋傞儴2%浠ュ収
-                    score += W_FVG // 2
-                    tags.append("鎺ヨ繎FVG鏀拹缂哄彛")
-                    break
-            for fvg in bearish_fvgs[:2]:
-                dist = (fvg["bottom"] - curr) / max(curr, 1e-9)
-                if 0 < dist < 0.02:
-                    score -= W_FVG // 2
-                    tags.append("鎺ヨ繎FVG澹撳姏缂哄彛")
-                    break
-
-        return min(max(score, -W_FVG), W_FVG), "|".join(tags) or "鐒VG"
-    except Exception as e:
-        return 0, "FVG澶辨晽"
+        if df is None or len(df) < 5:
+            return 0, "FVG 資料不足"
+        return 0, "本地 FVG 分析已停用"
+    except Exception:
+        return 0, "FVG 分析失敗"
 
 def analyze_ict(df4h, df15):
     """
@@ -3970,17 +3374,17 @@ def analyze_ict(df4h, df15):
                 tags.append("CHoCH瓒ㄥ嫝杞夌┖")
 
         # 绺噺鍥炶鍋垫脯锛堝仛澶氱⒑瑾嶏級
-        # 姊濅欢锛氭渶杩?鏍筀妫掑児鏍间笅璺屼絾鎴愪氦閲忕府灏?        if len(c4) >= 6 and len(v4) >= 6:
-            recent_prices = c4[-4:-1]
+        # Condition: recent candles pulled back while volume faded
+        if len(c4) >= 6 and len(v4) >= 6:
             recent_vols = v4[-4:-1]
             avg_vol = sum(v4[-20:-4]) / max(len(v4[-20:-4]), 1)
 
             is_pullback = recent_prices[-1] < recent_prices[0]  # 杩戞湡鍥炶
-            is_low_vol = sum(recent_vols) / 3 < avg_vol * 0.7   # 鎴愪氦閲忕府灏?0%
+            is_low_vol = sum(recent_vols) / 3 < avg_vol * 0.7   # volume below 70% of baseline
 
             if is_pullback and is_low_vol:
-                # 澶ц定鍕㈡槸澶氶牠鎵嶅姞鍒?                if c4[-1] > sum(c4[-20:]) / 20:  # 鍍规牸鍦?0鏍瑰潎绶氫笂
-                    score += 5
+                # Reward clean low-volume pullbacks when price still holds above the local mean
+                if c4[-1] > sum(c4[-20:]) / 20:
                     tags.append("绺噺鍋ュ悍鍥炶")
                 else:
                     score -= 3
@@ -4086,12 +3490,12 @@ def analyze_liquidity_sweep(df):
             score -= W["liq_sweep"] // 2
             tags.append("鏈夋晥璺岀牬浣庨粸")
 
-        return min(max(score, -W["liq_sweep"]), W["liq_sweep"]), "|".join(tags) or "鐒℃巸鍠?
+        return min(max(score, -W["liq_sweep"]), W["liq_sweep"]), "|".join(tags) or "無流動性掃單訊號"
     except:
-        return 0, "鎺冨柈鍒嗘瀽澶辨晽"
+        return 0, "流動性掃單分析失敗"
 
 # =====================================================
-# 鑾婂 / 鎴愪氦閲?# =====================================================
+# Whale / volume behaviour
 def analyze_whale(df):
     try:
         score = 0
@@ -4116,11 +3520,11 @@ def analyze_candles(df):
         body=abs(c-o); rng=h-l if h!=l else 1e-9
         upper=h-max(c,o); lower=min(c,o)-l
         unit = W["candle"]
-        if lower>body*2 and upper<body*0.3 and c>o:  score+=unit;   tags.append("閷樺瓙绶?)
-        if upper>body*2 and lower<body*0.3 and c<o:  score-=unit;   tags.append("娴佹槦绶?)
+        if lower>body*2 and upper<body*0.3 and c>o:  score+=unit;   tags.append("槌子線")
+        if upper>body*2 and lower<body*0.3 and c<o:  score-=unit;   tags.append("流星線")
         if c>o and pc<po and c>po and o<pc:           score+=unit;   tags.append("澶氶牠鍚炲櫖")
         if c<o and pc>po and c<po and o>pc:           score-=unit;   tags.append("绌洪牠鍚炲櫖")
-        if body/rng<0.1:                              tags.append("鍗佸瓧鏄?)
+        if body/rng<0.1:                              tags.append("十字星")
         if c>o and body/rng>0.7:                      score+=unit//2; tags.append("寮峰嫝闄界窔")
         if c<o and body/rng>0.7:                      score-=unit//2; tags.append("寮峰嫝闄扮窔")
         if len(df)>=3:
@@ -4130,12 +3534,12 @@ def analyze_candles(df):
                 score+=unit; tags.append("鏃╂櫒涔嬫槦")
             if c2>o2 and abs(c1-o1)<abs(c2-o2)*0.3 and c<o and c<(c2+o2)/2:
                 score-=unit; tags.append("榛冩槒涔嬫槦")
-        return min(max(score,-unit),unit), "|".join(tags) or "鐒＄壒娈奒妫?
+        return min(max(score,-unit),unit), "|".join(tags) or "無特殊 K 線"
     except:
-        return 0, "K妫掑け鏁?
+        return 0, "K 線分析失敗"
 
 # =====================================================
-# 鍦栧舰鍨嬫厠
+# Chart pattern analysis
 # =====================================================
 def analyze_chart_pattern(df):
     try:
@@ -4143,28 +3547,28 @@ def analyze_chart_pattern(df):
         hi=df['h'].tail(50).tolist(); lo=df['l'].tail(50).tolist()
         mid=len(lo)//2
 
-        # W搴曪細鍏╀綆榛炵浉杩戯紝涓枔鏈夊弽褰?        lL,rL=min(lo[:mid]),min(lo[mid:])
+        # W bottom: two similar lows with a bounce between them
         mH=max(hi[mid-8:mid+8]) if len(hi)>16 else 0
         if (lL<mH*0.96 and rL<mH*0.96 and
             abs(lL-rL)/max(abs(lL),1e-9)<0.06 and
             mH>max(lL,rL)*1.03):
-            score+=W["chart_pat"]; name="W搴?
+            score+=W["chart_pat"]; name="W 底"
 
-        # M闋細鍏╅珮榛炵浉杩戯紝涓枔鏈夊洖钀?鈫?娓涘垎
+        # M top: two similar highs with a dip between them
         lH,rH=max(hi[:mid]),max(hi[mid:])
         mL=min(lo[mid-8:mid+8]) if len(lo)>16 else 0
         if (lH>mL*1.04 and rH>mL*1.04 and
             abs(lH-rH)/max(abs(lH),1e-9)<0.06 and
             mL<min(lH,rH)*0.97):
-            score-=W["chart_pat"]; name="M闋紙鐪嬬┖锛?
+            score-=W["chart_pat"]; name="M 頂（看空）"
 
-        # 涓夎褰?        rhi=hi[-15:]; rlo=lo[-15:]
+        # Triangle-style consolidation
         if max(rhi)-min(rhi)<max(rhi)*0.03 and rlo[-1]>rlo[0]:
-            score+=W["chart_pat"]//2; name="涓婂崌涓夎"
+            score+=W["chart_pat"]//2; name="上升三角"
         elif max(rlo)-min(rlo)<max(rlo)*0.03 and rhi[-1]<rhi[0]:
-            score-=W["chart_pat"]//2; name="涓嬮檷涓夎锛堢湅绌猴級"
+            score-=W["chart_pat"]//2; name="下降三角（看空）"
 
-        # 闋偐闋?搴?        if len(hi)>=45:
+        # Head and shoulders / inverse head and shoulders
             t=len(hi)//3
             h1,h2,h3=max(hi[:t]),max(hi[t:2*t]),max(hi[2*t:])
             if h2>h1*1.02 and h2>h3*1.02 and abs(h1-h3)/max(h1,1e-9)<0.08:
@@ -4173,27 +3577,31 @@ def analyze_chart_pattern(df):
             if l2<l1*0.98 and l2<l3*0.98 and abs(l1-l3)/max(l1,1e-9)<0.08:
                 score+=W["chart_pat"]; name="闋偐搴曪紙寮风湅澶氾級"
 
-        return min(max(score,-W["chart_pat"]),W["chart_pat"]), name or "鐒℃槑椤舰鎱?
-    except:
-        return 0, "褰㈡厠澶辨晽"
-
 # =====================================================
-# Trend Magic锛圕CI + ATR 鑷仼鎳夎定鍕㈢窔锛?# =====================================================
+# Multi-timeframe confirmation
+# =====================================================
 def analyze_mtf_confirm(d15, d4h, d1d):
-    """
-    澶氭檪妗嗘柟鍚戠⒑瑾嶏紙Multi-TimeFrame锛?    15鍒嗛悩 + 4灏忔檪 + 鏃ョ窔 涓夊€嬫檪妗嗘柟鍚戜竴鑷存墠绲﹂珮鍒?    閫欐槸鎻愬崌鍕濈巼鏈€閲嶈鐨勯亷婵惧櫒
-    """
+    """Multi-timeframe confirmation across 15m, 4h, and 1d."""
     try:
         score = 0; tags = []
-        W_MTF = W.get("mtf_confirm", 14)
-
+def analyze_mtf_confirm(d15, d4h, d1d):
+    """Multi-timeframe confirmation across 15m, 4h, and 1d."""
+    """
         def get_direction(df):
-            """鐢‥MA鍒ゆ柗瑭叉檪妗嗘柟鍚?""
+            """Use EMA structure to infer timeframe direction."""
             c = df['c']
-            if len(c) < 20: return 0
-            e9  = float(ta.ema(c, length=9).iloc[-1])
+            if len(c) < 20:
+                return 0
+            e9 = float(ta.ema(c, length=9).iloc[-1])
             e20 = float(ta.ema(c, length=20).iloc[-1])
             curr = float(c.iloc[-1])
+            if pd.isna(e9) or pd.isna(e20):
+                return 0
+            if curr > e9 > e20:
+                return 1
+            if curr < e9 < e20:
+                return -1
+            return 0
             if pd.isna(e9) or pd.isna(e20): return 0
             if curr > e9 > e20: return 1   # 澶氶牠
             if curr < e9 < e20: return -1  # 绌洪牠
@@ -4202,45 +3610,46 @@ def analyze_mtf_confirm(d15, d4h, d1d):
         dir_4h = get_direction(d4h)
         dir_1d = get_direction(d1d)
 
-        dirs = [dir_15, dir_4h, dir_1d]
-        bull = sum(1 for d in dirs if d == 1)
-        bear = sum(1 for d in dirs if d == -1)
-
         if bull == 3:
-            score = W_MTF         # 涓夋鍏ㄥ 鈫?婊垮垎
-            tags.append("涓夋鍏辨尟鍋氬馃敟")
+            score = W_MTF
+            tags.append("??????")
         elif bull == 2:
-            score = round(W_MTF * 0.6)  # 鍏╂澶?            missing = ["15m","4H","鏃ョ窔"][dirs.index(next(d for d in dirs if d != 1))]
-            tags.append("闆欐澶?{})".format(missing+"寰呯⒑瑾?))
+            score = round(W_MTF * 0.6)
+            missing = ["15m", "4H", "??"][dirs.index(next(d for d in dirs if d != 1))]
+            tags.append("????({})".format(missing + "???"))
         elif bear == 3:
             score = -W_MTF
-            tags.append("涓夋鍏辨尟鍋氱┖馃敟")
+            tags.append("??????")
         elif bear == 2:
             score = -round(W_MTF * 0.6)
-            missing = ["15m","4H","鏃ョ窔"][dirs.index(next(d for d in dirs if d != -1))]
+            missing = ["15m", "4H", "??"][dirs.index(next(d for d in dirs if d != -1))]
+            tags.append("????({})".format(missing + "???"))
+        else:
+            score = 0
+            tags.append("????")
             tags.append("闆欐绌?{})".format(missing+"寰呯⒑瑾?))
         else:
             score = 0
             tags.append("澶氭涓€?鍒嗘")
 
-        return min(max(score, -W_MTF), W_MTF), "|".join(tags)
-    except Exception as e:
-        return 0, "MTF澶辨晽"
-
 def analyze_trend_magic(df, cci_period=20, atr_mult=1.5):
-    """
-    Trend Magic by GLAZ - CCI + ATR 绲勫悎
-    - CCI > 0锛氳定鍕㈢窔鍙兘涓婄Щ锛堝闋ā寮忥紝钘嶇窔锛?    - CCI < 0锛氳定鍕㈢窔鍙兘涓嬬Щ锛堢┖闋ā寮忥紝绱呯窔锛?    - 鍍规牸绌胯秺瓒ㄥ嫝绶?鈫?瓒ㄥ嫝杞夋彌瑷婅櫉
-    """
+    """Trend Magic by GLAZ - CCI + ATR combination."""
+    # CCI > 0 bullish, CCI < 0 bearish, line cross can be a trigger
+    try:
+        c = df['c']
+    """Trend Magic by GLAZ - CCI + ATR combination."""
+    # CCI > 0: bullish mode; CCI < 0: bearish mode; price crossing the line is a signal
+    try:
+        c = df['c']
     try:
         c = df['c']
         h = df['h']
         l = df['l']
         n = len(c)
-        if n < cci_period + 5:
-            return 0, "TM鏁告摎涓嶈冻"
-
-        # 瑷堢畻 CCI
+            prev_tm = tm[-1]
+            cci_val = float(cci.iloc[i]) if not pd.isna(cci.iloc[i]) else 0.0
+            atr_val = float(atr.iloc[i]) if not pd.isna(atr.iloc[i]) else 0.0
+            price = float(c.iloc[i])
         typical = (h + l + c) / 3
         tp_mean = typical.rolling(cci_period).mean()
         tp_mad  = typical.rolling(cci_period).apply(lambda x: abs(x - x.mean()).mean())
@@ -4249,7 +3658,7 @@ def analyze_trend_magic(df, cci_period=20, atr_mult=1.5):
         # 瑷堢畻 ATR
         atr_s = ta.atr(h, l, c, length=cci_period)
 
-        # 鍒濆鍖栬定鍕㈢窔
+        # initialize trend magic line
         tm = [float(c.iloc[0])]
         for i in range(1, n):
             atr_val = float(atr_s.iloc[i]) if not pd.isna(atr_s.iloc[i]) else float(c.iloc[i]) * 0.01
@@ -4258,10 +3667,10 @@ def analyze_trend_magic(df, cci_period=20, atr_mult=1.5):
             price   = float(c.iloc[i])
 
             if cci_val > 0:
-                # 澶氶牠妯″紡锛氳定鍕㈢窔鍙兘涓婄Щ
+                # bullish mode: trail can move upward
                 new_tm = max(prev_tm, price - atr_val * atr_mult)
             else:
-                # 绌洪牠妯″紡锛氳定鍕㈢窔鍙兘涓嬬Щ
+                # bearish mode: trail can move downward
                 new_tm = min(prev_tm, price + atr_val * atr_mult)
             tm.append(new_tm)
 
@@ -4306,10 +3715,10 @@ def analyze_trend_magic(df, cci_period=20, atr_mult=1.5):
         return 0, "TM瑷堢畻澶辨晽"
 
 def analyze_trend(df4h):
-    """
-    鐪熸鐨勮定鍕㈢窔鍒ゆ柗锛?    - 鐢ㄧ窔鎬у洖姝歌▓绠楁敮鎾愮窔鍜屽鍔涚窔鐨勬枩鐜?    - 鏂滅巼鍚戜笂 + 鍍规牸鍦ㄧ窔涓婃柟 = 涓婂崌瓒ㄥ嫝
-    - 鏂滅巼鍚戜笅 + 鍍规牸鍦ㄧ窔涓嬫柟 = 涓嬮檷瓒ㄥ嫝
-    """
+    """Analyze trend direction from slope and price location."""
+    # upward slope + price above line = uptrend
+    # downward slope + price below line = downtrend
+    try:
     try:
         score=0; tags=[]
         lo=df4h['l'].tolist(); hi=df4h['h'].tolist()
@@ -4391,7 +3800,7 @@ def get_best_atr_params(breakdown_keys):
 
 
 def get_learned_rr_target(symbol, regime, setup, breakdown_keys, sl_mult, tp_mult):
-    """璁?TP 鐢?AI 瀛稿埌鐨?RR 姹哄畾锛岃€屼笉鏄浐瀹?ATR 鍊嶆暩銆?""
+    # TP 由 AI 依 RR 與結構動態決定。
     base_rr = float(tp_mult or 3.0) / max(float(sl_mult or 2.0), 1e-9)
     rr_samples = []
 
@@ -4457,10 +3866,8 @@ def get_learned_rr_target(symbol, regime, setup, breakdown_keys, sl_mult, tp_mul
     return round(max(learned_rr, MIN_RR_HARD_FLOOR), 2)
 
 # =====================================================
-# 涓绘妧琛撳垎鏋愶紙鍏ㄩ€辨湡锛屾豢鍒?00锛?# =====================================================
-# 鐭窔绂佹涓嬪柈锛堢暀绲﹂暦鏈熷€変綅锛?SHORT_TERM_EXCLUDED = {'BTC/USDT:USDT'}
-
-# 涓绘祦骞ｆ竻鍠紙浣跨敤鏀惧鐗堣鍒嗭級
+# 主技術分析區塊
+# 短期排除名單與主流幣清單
 MAJOR_COINS = {
     'BTC/USDT:USDT','ETH/USDT:USDT','BNB/USDT:USDT','SOL/USDT:USDT',
     'XRP/USDT:USDT','ADA/USDT:USDT','DOGE/USDT:USDT','AVAX/USDT:USDT',
@@ -4470,9 +3877,7 @@ MAJOR_COINS = {
 
 
 def analyze_market_regime_for_symbol(d15, d4h, d1d):
-    """
-    鏂瑰悜鍒ゆ柗鏍稿績锛?    涓嶅啀鍙湅绺藉垎锛岃€屾槸鍏堝垽鏂烽€欏€嬪梗鐝惧湪灞柤
-    瓒ㄥ嫝寤剁簩 / 鍥炶俯绾屾敾 / 闇囩洩 / 鍙嶅綀鍙嶆娊銆?    """
+    # Classify the current structure into continuation, pullback, range, or rebound-fade.
     try:
         c15 = d15['c'].astype(float)
         h15 = d15['h'].astype(float)
@@ -4511,14 +3916,13 @@ def analyze_market_regime_for_symbol(d15, d4h, d1d):
         if curr < e21_4 and curr < e20_1 and slope4h < 0:
             return -3, -1, "鍋忕┖浣嗘湭瀹屽叏鍏辨尟", True
 
-        return 0, 0, "鍗€闁撻渿鐩?, False
+        return 0, 0, "區間震盪", False
     except Exception:
         return 0, 0, "鏂瑰悜鍒ゆ柗澶辨晽", False
 
 
 def analyze_entry_timing_quality(d15, d4h, direction_hint=0):
-    """
-    閫插牬鍝佽唱锛?    闋嗗嫝浣嗗お閬犱笉杩斤紱闋嗗嫝鍥炶俯銆佺獊鐮村緦绔欑┅銆侀噺鍍归厤鍚堟墠鍔犲垎銆?    """
+    # Evaluate entry timing quality for pullback, reclaim, and breakout confirmation.
     try:
         c = d15['c'].astype(float)
         o = d15['o'].astype(float)
@@ -4549,9 +3953,9 @@ def analyze_entry_timing_quality(d15, d4h, direction_hint=0):
             if curr >= hh * 0.998 and close_pos > 0.65 and body > atr * 0.45 and vol_now > vol_avg * 1.1:
                 score += 3; tags.append("绐佺牬甯堕噺绔欑┅")
             if ext > 1.5:
-                score -= 4; tags.append("闆㈠潎绶氶亷閬?)
+                score -= 4; tags.append("離均線過遠")
             if close_pos < 0.45 and curr >= hh * 0.998:
-                score -= 2; tags.append("绐佺牬鏀朵笉绌?)
+                score -= 2; tags.append("突破收不住")
         elif direction_hint < 0:
             if curr < ema9 < ema21:
                 score += 2; tags.append("15m绌洪牠鎺掑垪")
@@ -4561,17 +3965,17 @@ def analyze_entry_timing_quality(d15, d4h, direction_hint=0):
             if curr <= ll * 1.002 and low_close_pos > 0.65 and body > atr * 0.45 and vol_now > vol_avg * 1.1:
                 score += 3; tags.append("璺岀牬甯堕噺绔欑┅")
             if ext < -1.5:
-                score -= 4; tags.append("闆㈠潎绶氶亷閬?)
+                score -= 4; tags.append("離均線過遠")
             if low_close_pos < 0.45 and curr <= ll * 1.002:
-                score -= 2; tags.append("璺岀牬鏀朵笉绌?)
+                score -= 2; tags.append("跌破收不住")
         else:
             score -= 1
             tags.append("鏂瑰悜鏈槑")
 
         score = max(min(score, 8), -8)
-        return score, "|".join(tags) if tags else "閫插牬鍝佽唱涓€鑸?
+        return score, "|".join(tags) if tags else "進場品質一般"
     except Exception:
-        return 0, "閫插牬鍝佽唱澶辨晽"
+        return 0, "進場品質分析失敗"
 
 
 
@@ -4596,7 +4000,7 @@ def _calc_unified_targets(entry_price, atr_value, sl_mult, rr_target, side):
 
 
 def analyze_breakout_forecast(d15, d4h, direction_hint=0):
-    """鎻愬墠鍒ゆ柗绐佺牬钃勫嫝锛岄伩鍏嶇獊鐮村緦鎵嶈拷楂樸€?""
+    # 提前辨識突破追價風險。
     try:
         c = d15['c'].astype(float); h = d15['h'].astype(float); l = d15['l'].astype(float); v = d15['v'].astype(float)
         curr = float(c.iloc[-1])
@@ -4654,7 +4058,7 @@ def analyze_breakout_forecast(d15, d4h, direction_hint=0):
 
 
 def analyze_fvg_retest_quality(d15, d4h, direction_hint=0):
-    """FVG 鍥炶俯/鍙嶅綀鍝佽唱锛岄伩鍏嶆甯稿洖韪╄瑾ゅ垽鎴愯拷鍍广€?""
+    # FVG 回踩/反彈品質檢查。
     try:
         fvg_score, fvg_tag = analyze_fvg(d4h)
         c = d15['c'].astype(float); h = d15['h'].astype(float); l = d15['l'].astype(float)
@@ -4671,7 +4075,7 @@ def analyze_fvg_retest_quality(d15, d4h, direction_hint=0):
             meta.update({'active': True, 'is_pullback': True})
             if ext <= 1.15:
                 score += 1
-                tags.append('FVG鍥炶俯鏈牬浣?)
+                tags.append('FVG 回踩未破位')
                 meta['is_chase_ok'] = True
         elif direction_hint < 0 and (fvg_score < 0 or '鎺ヨ繎FVG澹撳姏缂哄彛' in str(fvg_tag) or 'FVG鍋氱┖缂哄彛' in str(fvg_tag)):
             score -= 2 if '鎺ヨ繎FVG澹撳姏缂哄彛' in str(fvg_tag) else 4 if 'FVG鍋氱┖缂哄彛' in str(fvg_tag) else 1
@@ -4679,11 +4083,11 @@ def analyze_fvg_retest_quality(d15, d4h, direction_hint=0):
             meta.update({'active': True, 'is_pullback': True})
             if ext <= 1.15:
                 score -= 1
-                tags.append('FVG鍙嶅綀鏈牬浣?)
+                tags.append('FVG 反彈未破位')
                 meta['is_chase_ok'] = True
-        return int(max(min(score, 6), -6)), '|'.join(dict.fromkeys(tags)) if tags else '鐒VG鍥炶俯', meta
+        return int(max(min(score, 6), -6)), '|'.join(dict.fromkeys(tags)) if tags else '無 FVG 回踩', meta
     except Exception as e:
-        return 0, f'FVG鍥炶俯澶辨晽:{str(e)[:20]}', {'active': False, 'is_pullback': False, 'is_chase_ok': False, 'ext_atr': 9.0}
+        return 0, f'FVG 回踩分析失敗:{str(e)[:20]}', {'active': False, 'is_pullback': False, 'is_chase_ok': False, 'ext_atr': 9.0}
 
 def analyze_fake_breakout(df, directional_bias=0):
     """
@@ -4709,7 +4113,7 @@ def analyze_fake_breakout(df, directional_bias=0):
         upper = high - max(close_, open_)
         lower = min(close_, open_) - low
         score = 0
-        tag = '鐒″亣绐佺牬'
+        tag = '????'
         meta = {'fakeout': False, 'direction': None, 'strength': 0.0}
 
         broke_up = high > hh * 1.0008
@@ -4723,16 +4127,16 @@ def analyze_fake_breakout(df, directional_bias=0):
             score = -min(8, max(3, int(round(2.5 + strength * 1.8))))
             if directional_bias < 0:
                 score = abs(score)
-            tag = '鍋囩獊鐮村洖钀?
+            tag = '假突破回落'
         elif broke_down and closed_back_in_down:
             strength = min((close_ - low) / max(atr, 1e-9), 3.0)
             meta = {'fakeout': True, 'direction': 'down', 'strength': round(strength, 2)}
             score = min(8, max(3, int(round(2.5 + strength * 1.8))))
             if directional_bias > 0:
                 score = -abs(score)
-            tag = '鍋囪穼鐮村洖鏀?
+            tag = '假跌破回收'
 
-        # 璺熺暥鍓嶅亸鍚戠浉鍙嶆檪锛岄澶栧姞閲嶆嚥缃?鐛庡嫷
+        # Add extra weight when the fakeout conflicts with the prior directional bias
         if meta['fakeout'] and directional_bias != 0:
             if directional_bias > 0 and meta['direction'] == 'up':
                 score -= 2
@@ -4802,17 +4206,17 @@ def analyze_legacy_shadow_1(symbol):
                 ms = -int(W["macd"] * (0.7 + 0.3*strength))
                 tags.append("MACD姝诲弶")
             elif mh>0:
-                ms=W["macd"]//2; tags.append("MACD澶?)
+                ms=W["macd"]//2; tags.append("MACD 多")
             else:
-                ms=-W["macd"]//2; tags.append("MACD绌?)
+                ms=-W["macd"]//2; tags.append("MACD 空")
         score+=ms; breakdown['MACD']=ms
 
-        # 澶氭檪妗嗙⒑瑾?        mtf_s, mtf_tag = analyze_mtf_confirm(d15, d4h, d1d)
-        score += mtf_s; breakdown['澶氭檪妗?] = mtf_s
-        if mtf_tag and "涓€? not in mtf_tag:
+        # 多時間框架確認
+        score += mtf_s; breakdown['多時間框架'] = mtf_s
+        if mtf_tag and '中性' not in mtf_tag:
             tags.append(mtf_tag)
 
-        # 鏃ョ窔EMA
+        # 日線 EMA
         e20=ta.ema(d1d['c'],length=20); e50=ta.ema(d1d['c'],length=50)
         e9=ta.ema(d1d['c'],length=9); es=0
         if e20 is not None and e50 is not None and not e20.empty and not e50.empty:
@@ -4875,33 +4279,33 @@ def analyze_legacy_shadow_1(symbol):
         elif dist_sup < sr_mid:
             ps=W["support_res"]//3;  tags.append("鏀拹鍗€闁撳収")
         elif curr>mid4:
-            ps=W["support_res"]//4;  tags.append("鍗€闁撲笂鍗?)
+            ps=W["support_res"]//4;  tags.append("區間上半")
         else:
-            ps=-W["support_res"]//4; tags.append("鍗€闁撲笅鍗?)
+            ps=-W["support_res"]//4; tags.append("區間下半")
         score+=ps; breakdown['澹撳姏鏀拹({:.4f}/{:.4f})'.format(s4h,r4h)]=ps
 
         # Trend Magic + 瓒ㄥ嫝绶?        tm_s, tm_tag = analyze_trend_magic(d4h)
         tl_s, tl_tag = analyze_trend(d4h)
         if (tm_s > 0 and tl_s > 0) or (tm_s < 0 and tl_s < 0):
             trend_final = tm_s
-            if tl_tag != "瓒ㄥ嫝涓€?:
+            if tl_tag != "趨勢中性":
                 tags.append(tl_tag)
         else:
             trend_final = (tm_s + tl_s) // 2
         trend_final = min(max(trend_final, -W["trendline"]), W["trendline"])
         score += trend_final; breakdown['TrendMagic'] = trend_final
-        if tm_tag and tm_tag != "TM涓€?:
+        if tm_tag and tm_tag != "TM中性":
             tags.append(tm_tag)
 
         # K妫?        cs,cd=analyze_candles(d15)
-        score+=cs; breakdown['K妫掑瀷鎱?]=cs
-        if cd!="鐒＄壒娈奒妫?:
+        score+=cs; breakdown['K線型態']=cs
+        if cd!="無特殊 K 線":
             tags.append(cd)
 
         # 鍦栧舰鍨嬫厠
         chs,chd=analyze_chart_pattern(d4h)
         score+=chs; breakdown['鍦栧舰鍨嬫厠']=chs
-        if chd!="鐒″舰鎱?:
+        if chd != "???":
             tags.append(chd)
 
         # OB
@@ -4924,8 +4328,8 @@ def analyze_legacy_shadow_1(symbol):
             tags.append(fvg_tag)
 
         # 娴佸嫊鎬ф巸鍠?        liq_s,liq_tag=analyze_liquidity_sweep(d15)
-        score+=liq_s; breakdown['娴佸嫊鎬ф巸鍠?]=liq_s
-        if liq_tag!="鐒℃巸鍠?:
+        score+=liq_s; breakdown['流動性掃單']=liq_s
+        if liq_tag!="無流動性掃單訊號":
             tags.append(liq_tag)
 
         # 鑾婂閲忚兘
@@ -4937,12 +4341,12 @@ def analyze_legacy_shadow_1(symbol):
         # 鏆存媺 / 鏆磋穼鍓嶇疆钃勫嫝绲愭
         pre_s, pre_tag = analyze_pre_breakout_setup(d15, d4h)
         score += pre_s; breakdown['钃勫嫝绲愭'] = pre_s
-        if pre_tag and '鐒℃槑椤? not in pre_tag and '涓嶈冻' not in pre_tag:
+        if pre_tag and '無明顯' not in pre_tag and '不足' not in pre_tag:
             tags.append(pre_tag)
 
         # 鎻愬墠绐佺牬闋愬垽锛堥伩鍏嶇獊鐮村緦鎵嶈拷锛?        bo_s, bo_tag, bo_meta = analyze_breakout_forecast(d15, d4h, regime_bias)
         score += bo_s; breakdown['绐佺牬闋愬垽'] = bo_s
-        if bo_tag and '鐒℃彁鍓嶇獊鐮寸祼妲? not in bo_tag:
+        if bo_tag and '無提前突破結構' not in bo_tag:
             tags.append(bo_tag)
 
         # FVG 鍥炶俯鍝佽唱锛堟甯稿洖韪╀笉鐣舵垚杩藉児锛?        fvg_rt_s, fvg_rt_tag, fvg_rt_meta = analyze_fvg_retest_quality(d15, d4h, regime_bias)
@@ -4951,7 +4355,7 @@ def analyze_legacy_shadow_1(symbol):
             tags.append(fvg_rt_tag)
 
         # 鍋囩獊鐮?/ 鍋囪穼鐮撮亷婵?        fake_s, fake_tag, fake_meta = analyze_fake_breakout(d15, score)
-        score += fake_s; breakdown['鍋囩獊鐮存烤缍?] = fake_s
+        score += fake_s; breakdown['假突破反制'] = fake_s
         if fake_meta.get('fakeout'):
             tags.append(fake_tag)
 
@@ -5080,8 +4484,8 @@ def analyze_legacy_shadow_1(symbol):
         atr_pct = atr / max(curr, 1e-9)
         if atr_pct > 0.045:
             score *= 0.75
-            tags.append("楂樻尝鍕曢檷娆?)
-            breakdown['楂樻尝鍕曢亷鐔?] = -4 if score > 0 else 4
+            tags.append("高波動降權")
+            breakdown['高波動過熱'] = -4 if score > 0 else 4
 
         # 4H 涓昏定鍕㈠皪榻婏細閫?4H 瓒ㄥ嫝鏅傜洿鎺ラ檷娆婏紝閬垮厤楂樺垎閫嗗嫝纭笂
         ema21_4h = safe_last(ta.ema(d4h['c'], length=21), curr)
@@ -5127,9 +4531,9 @@ def set_cached_news(score, sentiment, summary, latest_title):
     with NEWS_LOCK:
         NEWS_CACHE.update({
             "score": int(max(min(score, 5), -5)),
-            "sentiment": sentiment or "宸插仠鐢?,
+            "sentiment": sentiment or "已停用",
             "summary": summary or "",
-            "latest_title": latest_title or "鏂拌仦绯荤当宸插仠鐢?,
+            "latest_title": latest_title or "新聞模組已停用",
             "updated_at": time.time(),
         })
 
@@ -5143,9 +4547,9 @@ def news_thread():
     bot_news_disabled.news_thread(update_state=update_state, set_cached_news=set_cached_news, sleep_sec=300)
 
 # =====================================================
-# 绉诲嫊姝㈢泩杩借工绯荤当
+# ????????
 # =====================================================
-# 瑷橀寗姣忓€嬪€変綅鐨勮拷韫ょ媭鎱?# { "BTC/USDT:USDT": {
+# ?????????????
 #     "side": "long",
 #     "entry_price": 70000,
 #     "highest_price": 72000,   # 鍋氬鏅傜殑鏈€楂橀粸
@@ -5154,12 +4558,12 @@ def news_thread():
 # }}
 TRAILING_STATE = {}
 TRAILING_LOCK  = threading.Lock()
-ORDER_LOCK     = threading.Lock()   # 闃叉鍚屾檪涓嬪绛嗗柈瓒呴亷7鍊嬫寔鍊?_ORDERED_THIS_SCAN = set()  # 鏈吉宸蹭笅鍠殑骞ｏ紙闃叉鍚岃吉閲嶈涓嬪柈锛?_ORDERED_LOCK = threading.Lock()
-
+ORDER_LOCK     = threading.Lock()   # 防止同時下多筆單
+_ORDERED_THIS_SCAN = set()  # 當前掃描輪已下單的 symbols
 def detect_reversal(sym, side, current_price):
     """
-    鍋垫脯瓒ㄥ嫝鍙嶈綁瑷婅櫉锛堢敤鏂煎垎鎵规鐩堢殑绶婃€ュ钩鍊夛級
-    鍥炲偝 (鏄惁鍙嶈綁, 鍘熷洜)
+    Detect short-term reversal signals for trailing stop and protective exit logic.
+    Returns (is_reversal, reason).
     """
     try:
         ohlcv = exchange.fetch_ohlcv(sym, '15m', limit=20)
@@ -5190,36 +4594,38 @@ def detect_reversal(sym, side, current_price):
         range_ = h_last - l_last
         if range_ > 0:
             if side == 'long':
-                # 鍋氬鏅傚嚭鐝惧ぇ闄扮窔锛堝楂?60%锛?                if c_last < o_last and body / range_ > 0.6:
-                    signals.append("寮峰姏闄扮窔鍙嶈綁")
-                # 涓婂奖绶氶亷闀凤紙琚鍥烇級
-                upper_shadow = h_last - max(c_last, o_last)
+                # Long-side reversal warning: large bearish body (>60% of candle range)
+                if c_last < o_last and body / range_ > 0.6:
+                    signals.append("強力陰線反轉")
+                # Long upper shadow can signal rejection
                 if upper_shadow > body * 2:
                     signals.append("闀蜂笂褰辩窔澹撳洖")
             elif side == 'short':
-                # 鍋氱┖鏅傚嚭鐝惧ぇ闄界窔锛堝楂?60%锛?                if c_last > o_last and body / range_ > 0.6:
-                    signals.append("寮峰姏闄界窔鍙嶈綁")
-                # 涓嬪奖绶氶亷闀凤紙琚拹璧凤級
-                lower_shadow = min(c_last, o_last) - l_last
+                # Short-side reversal warning: large bullish body (>60% of candle range)
+                if c_last > o_last and body / range_ > 0.6:
+                    signals.append("強力陽線反轉")
+                # Long lower shadow can signal support bounce
                 if lower_shadow > body * 2:
                     signals.append("闀蜂笅褰辩窔鎾愯捣")
 
-        # 4. 閫ｇ簩3鏍瑰弽鍚慘妫?        last3_c = c.iloc[-4:-1].values
+        # 4. 連續 3 根反向 K 線檢查
+        last3_c = c.iloc[-4:-1].values
         if side == 'long':
             if all(last3_c[i] < last3_c[i-1] for i in range(1,3)):
-                signals.append("閫?鏍逛笅璺?)
+                signals.append("連三根下跌")
         elif side == 'short':
             if all(last3_c[i] > last3_c[i-1] for i in range(1,3)):
-                signals.append("閫?鏍逛笂婕?)
+                signals.append("連三根上漲")
 
-        # 闇€瑕?2 鍊嬩互涓婅▕铏熸墠纰鸿獚鍙嶈綁锛堥伩鍏嶅亣淇¤櫉锛?        if len(signals) >= 2:
-            return True, "鍙嶈綁瑷婅櫉: " + "|".join(signals)
+        # 需要 2 個以上訊號才確認反轉，避免假訊號
+        if len(signals) >= 2:
+            return True, "反轉訊號: " + "|".join(signals)
         return False, ""
     except Exception as e:
         return False, ""
 
 def partial_close_position(sym, contracts, side, ratio, reason=""):
-    """閮ㄥ垎骞冲€?""
+    # 部分平倉
     try:
         close_side = 'sell' if side == 'long' else 'buy'
         partial_qty = abs(contracts) * ratio
@@ -5229,19 +4635,18 @@ def partial_close_position(sym, contracts, side, ratio, reason=""):
             'posSide':    side,
             'tdMode':     'cross',
         })
-        print("馃摛 閮ㄥ垎骞冲€?{} {:.0f}% | {}".format(sym, ratio*100, reason))
+        print("部分平倉 {} {:.0f}% | {}".format(sym, ratio*100, reason))
         return True
     except Exception as e:
-        print("閮ㄥ垎骞冲€夊け鏁?{}: {}".format(sym, e))
+        print("部分平倉失敗 {}: {}".format(sym, e))
         return False
 
 def update_trailing(sym, side, current_price, atr):
-    """
-    鍒嗘壒姝㈢泩 + 鍕曟厠姝㈡悕绯荤当
-    鐩1锛?1.2ATR锛夆啋 骞冲€?5%锛屾鎼嶇Щ鑷充繚鏈?    鐩2锛?2.4ATR锛夆啋 鍐嶅钩鍊?5%锛屾鎼嶇Щ鑷?0.8ATR
-    鐩3锛?4.2ATR锛夆啋 鍓╅閮ㄤ綅璺熻憲璧帮紝姝㈡悕鏄庨’鏀剁穵
-    鍙嶈綁鍋垫脯        鈫?绔嬪嵆鍏ㄥ钩閹栧埄
-    """
+    # 更新移動停利與分批止盈規則
+    # 階段 1：1.2 ATR -> 先平 50% 並上移保護
+    # 階段 2：2.4 ATR -> 再平 25%，停利跟隨 0.8 ATR
+    # 階段 3：4.2 ATR -> 啟動更積極的追蹤保護
+    # 回撤過大 -> 觸發保護
     with TRAILING_LOCK:
         if sym not in TRAILING_STATE:
             return False, "", 0
@@ -5251,7 +4656,8 @@ def update_trailing(sym, side, current_price, atr):
         atr_val = ts.get("atr", current_price * 0.01)
         if atr_val <= 0: atr_val = current_price * 0.01
 
-        partial_done = ts.get("partial_done", 0)  # 宸插畬鎴愬咕鎵规鐩?        bd = dict(ts.get("breakdown") or {})
+        partial_done = ts.get("partial_done", 0)  # 已完成分批止盈次數
+        bd = dict(ts.get("breakdown") or {})
         trend_prof = _trend_learning_profile(sym, regime=str(bd.get("Regime", "neutral") or "neutral"), setup=str(ts.get("setup_label") or bd.get("Setup", "") or ""))
         trend_stage = str(trend_prof.get("stage") or "learning")
         trend_ratio = float(trend_prof.get("intervene_ratio", 0.0) or 0.0)
@@ -5265,36 +4671,38 @@ def update_trailing(sym, side, current_price, atr):
             profit_atr = (current_price - entry) / atr_val
             hint_tp = float(ts.get("dynamic_take_profit_hint", 0) or 0)
 
-            # OpenAI 鍙彁渚涘缓璀板瀷鍕曟厠姝㈢泩浣嶏紱鍛戒腑寰屽彧鏀剁穵淇濊锛屼笉瑕嗚搵鍘熸湰绯荤当銆?            if hint_tp > entry and current_price >= hint_tp and not ts.get("dynamic_hint_armed"):
+            # OpenAI 動態止盈提示觸發後，收緊保護並上調停損
+            if hint_tp > entry and current_price >= hint_tp and not ts.get("dynamic_hint_armed"):
                 ts["dynamic_hint_armed"] = True
                 ts["trail_pct"] = min(float(ts.get("trail_pct", 0.05) or 0.05), 0.03)
                 suggested_sl = max(entry, hint_tp - atr_val * 0.6)
                 ts["initial_sl"] = max(float(ts.get("initial_sl", 0) or 0), min(current_price, suggested_sl))
 
-            # 鈹€鈹€ 鍒嗘壒姝㈢泩 鈹€鈹€
-            # 鐩1锛?1.5ATR 鈫?骞?0%锛屾鎼嶇Щ鍒颁繚鏈?            if profit_atr >= 1.2 and partial_done == 0:
+            # 分批止盈
+            # 階段 1：1.2 ATR -> 平 25%，停損推回保本
+            if profit_atr >= 1.2 and partial_done == 0:
                 ts["partial_done"]  = 1
                 ts["initial_sl"]    = max(ts.get("initial_sl", 0), entry)
                 ts["trail_pct"]     = 0.05
-                print("馃幆 鐩1閬旀垚 {} +{:.1f}ATR 鈫?骞?5%锛屾鎼嶇Щ淇濇湰".format(sym, profit_atr))
-                return True, "鐩1骞冲€?5% +{:.1f}ATR".format(profit_atr), 0.25
+                print("分批止盈第1段達成 {} +{:.1f}ATR -> 平 25%，停損移到保本".format(sym, profit_atr))
+                return True, "第1段平倉 25% +{:.1f}ATR".format(profit_atr), 0.25
 
-            # 鐩2锛?2.4ATR 鈫?鍐嶅钩35%锛屾鎼嶇Щ鍒?0.8ATR
+            # 階段 2：2.4 ATR -> 再平 35%，停損抬到 0.8 ATR
             elif profit_atr >= 2.4 and partial_done == 1:
                 ts["partial_done"]  = 2
                 ts["initial_sl"]    = max(ts.get("initial_sl", 0), entry + atr_val * 0.8)
                 ts["trail_pct"]     = 0.04
-                print("馃幆 鐩2閬旀垚 {} +{:.1f}ATR 鈫?鍐嶅钩35%锛屾鎼?0.8ATR".format(sym, profit_atr))
-                return True, "鐩2骞冲€?5% +{:.1f}ATR".format(profit_atr), 0.35
+                print("分批止盈第2段達成 {} +{:.1f}ATR -> 再平 35%，停損抬到 0.8ATR".format(sym, profit_atr))
+                return True, "第2段平倉 35% +{:.1f}ATR".format(profit_atr), 0.35
 
-            # 鐩3锛?4.2ATR 鈫?鍓╅璺熺穵
+            # 階段 3：4.2 ATR -> 啟動更積極追蹤
             elif profit_atr >= 4.2 and partial_done == 2:
                 ts["partial_done"]  = 3
                 ts["initial_sl"]    = max(ts.get("initial_sl", 0), current_price - atr_val * 1.2)
                 ts["trail_pct"]     = 0.028
-                print("馃幆 鐩3閬旀垚 {} +{:.1f}ATR 鈫?绶婄府绉诲嫊姝㈢泩".format(sym, profit_atr))
+                print("分批止盈第3段達成 {} +{:.1f}ATR -> 啟動強追蹤".format(sym, profit_atr))
 
-            # 鈹€鈹€ 姝㈡悕绉诲嫊锛堝彧鍗囦笉闄嶏級鈹€鈹€
+            # 移動停損（只升不降）
             if profit_atr >= 4.2:
                 new_sl = current_price - atr_val * 1.2
                 ts["trail_pct"] = 0.028
@@ -5309,11 +4717,11 @@ def update_trailing(sym, side, current_price, atr):
             if new_sl > ts.get("initial_sl", 0):
                 ts["initial_sl"] = new_sl
 
-            # 鈹€鈹€ 瑙哥櫦姊濅欢 鈹€鈹€
+            # 追蹤停利條件
             trail_price = highest * (1 - ts.get("trail_pct", 0.05))
             current_sl  = ts.get("initial_sl", 0)
 
-            # 寰炴渶楂橀粸鍥炴挙瑙哥櫦鍏ㄥ钩
+            # 從最高點回撤觸發全平
             if current_price < trail_price and partial_done >= 1:
                 pullback_atr = (highest - current_price) / max(atr_val, 1e-9)
                 if hold_bias > 0 and trend_stage in ('semi', 'full') and profit_atr >= 1.2:
@@ -5324,11 +4732,12 @@ def update_trailing(sym, side, current_price, atr):
                         ts["hold_bias_active"] = round(hold_bias, 4)
                         ts["trail_pct"] = min(max(ts.get("trail_pct", 0.05) * (1.0 + hold_bias * 0.35), 0.032), 0.095)
                         return False, "", 0
-                return True, "绉诲嫊姝㈢泩瑙哥櫦 宄?{:.6f} 鐝?{:.6f} 鍥炴挙{:.1f}%".format(
+                return True, "追蹤止盈 最高{:.6f} 現價{:.6f} 回撤{:.1f}%".format(
                     highest, current_price, (highest-current_price)/highest*100), 1.0
 
-            # 璺岀牬姝㈡悕绶?            if current_sl > 0 and current_price < current_sl:
-                sl_type = "淇濇湰姝㈡悕" if abs(current_sl-entry)<atr_val*0.1 else "绉诲嫊姝㈡悕"
+            # 跌破停損線
+            if current_sl > 0 and current_price < current_sl:
+                sl_type = "保本停損" if abs(current_sl-entry)<atr_val*0.1 else "移動停損"
                 return True, "{} @{:.6f}".format(sl_type, current_price), 1.0
 
         elif side == "short":
@@ -5339,7 +4748,8 @@ def update_trailing(sym, side, current_price, atr):
             profit_atr = (entry - current_price) / atr_val
             hint_tp = float(ts.get("dynamic_take_profit_hint", 0) or 0)
 
-            # OpenAI 鍙彁渚涘缓璀板瀷鍕曟厠姝㈢泩浣嶏紱鍛戒腑寰屽彧鏀剁穵淇濊锛屼笉瑕嗚搵鍘熸湰绯荤当銆?            if 0 < hint_tp < entry and current_price <= hint_tp and not ts.get("dynamic_hint_armed"):
+            # OpenAI ????????????????????????????
+            if 0 < hint_tp < entry and current_price <= hint_tp and not ts.get("dynamic_hint_armed"):
                 ts["dynamic_hint_armed"] = True
                 ts["trail_pct"] = min(float(ts.get("trail_pct", 0.05) or 0.05), 0.03)
                 suggested_sl = min(entry, hint_tp + atr_val * 0.6)
@@ -5388,7 +4798,7 @@ def update_trailing(sym, side, current_price, atr):
                         ts["hold_bias_active"] = round(hold_bias, 4)
                         ts["trail_pct"] = min(max(ts.get("trail_pct", 0.05) * (1.0 + hold_bias * 0.35), 0.032), 0.095)
                         return False, "", 0
-                return True, "绉诲嫊姝㈢泩瑙哥櫦 璋?{:.6f} 鐝?{:.6f} 鍙嶅綀{:.1f}%".format(
+                return True, "?????? ?{:.6f} ?{:.6f} ??{:.1f}%".format(
                     lowest, current_price, (current_price-lowest)/lowest*100), 1.0
 
             if current_sl < float('inf') and current_price > current_sl:
@@ -5408,7 +4818,7 @@ def update_trailing(sym, side, current_price, atr):
 
 
 def close_position(sym, contracts, side):
-    """骞冲€夊柈涓€鍊変綅"""
+    # 平掉單一持倉。
     try:
         close_side = 'sell' if side == 'long' else 'buy'
         exchange.create_order(sym, 'market', close_side, abs(contracts),
@@ -5417,15 +4827,15 @@ def close_position(sym, contracts, side):
         with TRAILING_LOCK:
             if sym in TRAILING_STATE:
                 del TRAILING_STATE[sym]
-        print("绉诲嫊姝㈢泩骞冲€夋垚鍔? {} {}鍙?| 鍟熺敤30鍒嗛悩鍐峰嵒".format(sym, contracts))
+        print("???????? {} {}? | ??30????".format(sym, contracts))
         return True
     except Exception as e:
-        print("绉诲嫊姝㈢泩骞冲€夊け鏁?{}: {}".format(sym, e))
+        print("???????? {}: {}".format(sym, e))
         return False
 
 def trailing_stop_thread():
-    """鐛ㄧ珛鍩疯绶掞紝姣?绉掕拷韫ゆ墍鏈夋寔鍊?""
-    print("绉诲嫊姝㈢泩鍩疯绶掑暉鍕?)
+    """?????????????????"""
+    print("???????????")
     while True:
         try:
             with STATE_LOCK:
@@ -5482,23 +4892,26 @@ def trailing_stop_thread():
                         # 鍒嗘壒姝㈢泩锛堥儴鍒嗗钩鍊夛級
                         print("馃幆 鍒嗘壒姝㈢泩 {} {:.0f}% | {}".format(sym, close_ratio*100, reason))
                         partial_close_position(sym, contracts, side, close_ratio, reason)
-                        # 鏇存柊鎸佸€夋暩閲忥紙瀵﹂殯鏈冨湪涓嬫 position_thread 鏇存柊锛?                    else:
-                        # 鍏ㄥ钩
-                        print("馃摛 鍏ㄩ儴骞冲€?{} | {}".format(sym, reason))
-                        close_position(sym, contracts, side)
+                        # ??????????????? position_thread?
+                    else:
+                        # ??
+                        print("???? {} | {}".format(sym, reason))
 
-                # 鍙嶈綁鍋垫脯锛堟湁鏈鐝惧埄娼ゆ墠鍋垫脯锛岄伩鍏嶆氮璨籄PI锛?                elif side in ('long', 'short'):
+                # ????????????????? API?
+                elif side in ('long', 'short'):
                     with TRAILING_LOCK:
                         ts_now = TRAILING_STATE.get(sym, {})
                         entry_p = ts_now.get("entry_price", curr)
                         profit_pct = (curr - entry_p)/entry_p if side=='long' else (entry_p - curr)/entry_p
-                    if profit_pct > 0.01:  # 鏈夎秴閬?%鍒╂饯鎵嶅伒娓弽杞?                        is_reversal, rev_reason = detect_reversal(sym, side, curr)
+                    if profit_pct > 0.01:
+                        is_reversal, rev_reason = detect_reversal(sym, side, curr)
                         if is_reversal:
-                            print("鈿?鍙嶈綁瑷婅櫉锛亄} {} 鈫?绔嬪嵆骞冲€夐帠鍒?| {}".format(sym, side, rev_reason))
+                            print("?????{} {} -> ???? | {}".format(sym, side, rev_reason))
                             close_position(sym, contracts, side)
                     # 瑷橀寗鍒颁氦鏄撴鍙?                    close_rec = {
+                    close_rec = {
                         "symbol":      sym,
-                        "side":        "绉诲嫊姝㈢泩骞冲€?,
+                        "side":        "??????",
                         "score":       0,
                         "price":       curr,
                         "stop_loss":   0,
@@ -5573,7 +4986,7 @@ def position_thread():
             closed_syms=PREV_POSITION_SYMS-curr_syms
             for sym in closed_syms:
                 if not queue_learn_for_closed_symbol(sym, curr_syms):
-                    print("璀﹀憡: {} 鐒″缈掔磤閷勶紙鍙兘鏄墜鍕曚笅鍠級".format(sym))
+                    print("??: {} ???????????????????".format(sym))
 
             # 瑁滃劅姗熷埗锛氶伩鍏嶄氦鏄撴墍 TP/SL 宸叉垚浜わ紝浣嗗洜閲嶅暉/婕忚吉瑭㈡矑琚閷?            with LEARN_LOCK:
                 open_symbols = list({t.get('symbol') for t in LEARN_DB.get('trades', []) if t.get('result') == 'open' and t.get('symbol')})
@@ -5801,7 +5214,7 @@ def learn_from_closed_trade(trade_id):
     return _enqueue_closed_trade_learning(trade_id)
 
 def _auto_adjust_weights(db):
-    """鑸婂浐瀹氭瑠閲嶄繚鐣欑偤鍩虹鐗瑰镜锛屼笉鍐嶇洿鎺ヨ钃?W锛涙敼杓稿嚭 AI 鑷富閭忚集鎻愮ず銆?""
+    # 保留最小必要特徵供 AI 判斷，不再依賴舊權重公式。
     try:
         trades = [t for t in db["trades"] if t["result"] in ("win","loss") and t.get("breakdown")]
         if len(trades) < 30:
@@ -6257,8 +5670,9 @@ def tighten_position_for_session(sym, contracts, side, entry_price, mark_price):
             else:
                 pnl_pct = (entry_price - mark_price) / entry_price
 
-        # 鐩堝埄鍠府涓€鍗婂€変綅锛岃畵鍓╅閮ㄤ綅浜ょ郸绉诲嫊姝㈢泩锛涜櫑鎼嶅柈鐩存帴骞冲€夈€?        if pnl_pct > 0.004:
-            partial_close_position(sym, contracts, side, 0.5, "闁嬬洡淇濊绺€?)
+        # ????????????????????????????
+        if pnl_pct > 0.004:
+            partial_close_position(sym, contracts, side, 0.5, "????")
             with TRAILING_LOCK:
                 if sym in TRAILING_STATE:
                     ts = TRAILING_STATE[sym]
@@ -6267,10 +5681,10 @@ def tighten_position_for_session(sym, contracts, side, entry_price, mark_price):
                         ts['initial_sl'] = max(ts.get('initial_sl', 0), entry_price)
                     else:
                         ts['initial_sl'] = min(ts.get('initial_sl', float('inf')), entry_price)
-            print("馃洝 闁嬬洡淇濊绺€? {} 鐩堝埄鍠繚鐣欒定鍕㈠柈".format(sym))
+            print("??????: {} ???????".format(sym))
         else:
             close_position(sym, contracts, side)
-            print("馃洝 闁嬬洡淇濊骞冲€? {} 铏ф悕/鐒″埄娼ゅ柈鐩存帴闆㈠牬".format(sym))
+            print("??????: {} ????/????????".format(sym))
     except Exception as e:
         print("闁嬬洡淇濊铏曠悊澶辨晽 {}: {}".format(sym, e))
 
@@ -7678,11 +7092,11 @@ def scan_thread():
                             "raw_score": sc, "stable_score": stable_score, "updated_at": tw_now_str(), "ts": time.time(),
                             "setup_label": bd.get("Setup", ""),
                             "signal_grade": bd.get("绛夌礆", ""),
-                            "direction_confidence": (lambda _dc, _tc: round(float(_dc if _dc not in (None, '', 0, 0.0) else float(_tc or 0) / 10.0), 1))(bd.get("鏂瑰悜淇″績"), bd.get("TrendConfidence", 0)),
-                            "entry_quality": bd.get("閫插牬鍝佽唱", 0),
+                            "direction_confidence": (lambda _dc, _tc: round(float(_dc if _dc not in (None, '', 0, 0.0) else float(_tc or 0) / 10.0), 1))(bd.get("????"), bd.get("TrendConfidence", 0)),
+                            "entry_quality": bd.get("??????", 0),
                             "rr_ratio": bd.get("RR", 0),
                             "regime": bd.get("Regime", "neutral"),
-                            "regime_confidence": bd.get("RegimeConfidence", bd.get("TrendConfidence", bd.get("鏂瑰悜淇″績", 0))),
+                            "regime_confidence": bd.get("RegimeConfidence", bd.get("TrendConfidence", bd.get("????", 0))),
                         }
                         sigs.append({
                             "symbol":sym,"score":stable_score,"raw_score":sc,"desc":desc,"price":pr,
@@ -7702,10 +7116,10 @@ def scan_thread():
                             "regime_bias": bd.get("RegimeBias", 0),
                             "setup_label": bd.get("Setup", ""),
                             "signal_grade": bd.get("绛夌礆", ""),
-                            "direction_confidence": (lambda _dc, _tc: round(float(_dc if _dc not in (None, '', 0, 0.0) else float(_tc or 0) / 10.0), 1))(bd.get("鏂瑰悜淇″績"), bd.get("TrendConfidence", 0)),
+                            "direction_confidence": (lambda _dc, _tc: round(float(_dc if _dc not in (None, '', 0, 0.0) else float(_tc or 0) / 10.0), 1))(bd.get("????"), bd.get("TrendConfidence", 0)),
                             "regime": bd.get("Regime", "neutral"),
-                            "regime_confidence": bd.get("RegimeConfidence", bd.get("TrendConfidence", bd.get("鏂瑰悜淇″績", 0))),
-                            "trend_confidence": bd.get("TrendConfidence", bd.get("鏂瑰悜淇″績", 0)),
+                            "regime_confidence": bd.get("RegimeConfidence", bd.get("TrendConfidence", bd.get("????", 0))),
+                            "trend_confidence": bd.get("TrendConfidence", bd.get("????", 0)),
                             "score_jump": score_jump_alert(sym, sc, stable_score),
                             "marketability": marketability_by_symbol.get(sym, {}),
                             "marketability_score": (marketability_by_symbol.get(sym, {}) or {}).get("score", 0.0),
@@ -8181,9 +7595,9 @@ def scan_thread():
                                 if openai_decision.get('thesis'):
                                     reasons.append(str(openai_decision.get('thesis')))
                             else:
-                                reasons.append('OpenAI鎷掑柈: {}'.format(openai_decision.get('reason_to_skip') or '妯″瀷瑾嶇偤涓嶉仼鍚?))
+                                reasons.append('OpenAI ??: {}'.format(openai_decision.get('reason_to_skip') or '???????'))
                         elif openai_status == 'cooldown_active':
-                            reasons.append('OpenAI鍚屽梗鍐峰嵒涓?)
+                            reasons.append('OpenAI ?????')
                         elif openai_status == 'budget_paused':
                             reasons.append('OpenAI鏈堥爯绠楀凡閬斾笂闄?)
                         elif openai_status == 'below_min_score':
@@ -8348,9 +7762,9 @@ def scan_thread():
             else:
                 print("鎸佸€夊凡閬旈€佸鏆仠闁€妾?{}锛屾湰杓笉鍐嶉€?OpenAI / 涓嶉枊鏂板€?.format(review_position_cap))
 
-            # 鏇存柊鍕曟厠闁€妾?            update_dynamic_threshold(top10)
-
-            # 姣?0杓洿鏂颁竴娆″ぇ鐩ゅ垎鏋愶紙涓嶇瓑1灏忔檪锛?            if STATE.get("scan_count", 0) % 10 == 1:
+            # ??????
+            update_dynamic_threshold(top10)
+            if STATE.get("scan_count", 0) % 10 == 1:
                 try:
                     result = analyze_btc_market_trend()
                     if result:
@@ -8727,7 +8141,7 @@ def api_reset_cooldown():
 # =====================================================
 # 鍩疯绶掑畧璀凤細浠讳綍鍩疯绶掓鎺夎嚜鍕曢噸鍟?# =====================================================
 def watchdog(target_func, name):
-    """鍖呰９鍩疯绶掑嚱鏁革紝姝绘帀鑷嫊閲嶅暉锛堟崟鎹夋墍鏈夐尟瑾わ級"""
+    # 包裝背景執行緒函式，避免例外導致整個程序中止。
     while True:
         _set_backend_thread_state(name, 'starting', '婧栧倷鍟熷嫊')
         try:
@@ -9190,7 +8604,7 @@ def _direction_profile_v6(d15, d4h, d1d):
 
 
 def _ai_adaptive_scoring_profile(symbol='', regime='neutral', setup='', side=0, direction_conf_view=0.0, setup_q=0.0, rr_ratio=0.0):
-    """AI 鑷仼鎳夎鍒嗭細鍙彁渚涙渶鍩虹鐨勭壒寰靛弮鑰冭垏鍙缈掓瑠閲嶏紝涓嶅啀鐢ㄥぇ閲忓姝诲垎鏁稿叕寮忎富灏庛€?""
+    # AI 自主評分，只提供必要特徵與參考。
     try:
         profile = _ai_strategy_profile(symbol, regime=regime, setup=setup)
     except Exception:
@@ -9239,20 +8653,20 @@ def _ai_adaptive_scoring_profile(symbol='', regime='neutral', setup='', side=0, 
 
     if phase == 'full':
         adapt['bias'] += 0.22
-        adapt['notes'].append('AI鍏ㄦ帴绠?)
+        adapt['notes'].append('AI全接管')
     elif phase == 'semi':
         adapt['bias'] += 0.10
-        adapt['notes'].append('AI鍗婃帴绠?)
+        adapt['notes'].append('AI半接管')
     else:
         adapt['bias'] -= 0.04 if effective_count < 8 else 0.0
-        adapt['notes'].append('AI瀛哥繏涓?)
+        adapt['notes'].append('AI學習中')
 
     if status == 'valid':
         adapt['bias'] += 0.12
         adapt['notes'].append('绛栫暐鏈夋晥')
     elif status == 'observe':
         adapt['bias'] += 0.03
-        adapt['notes'].append('瑙€瀵熸ā寮?)
+        adapt['notes'].append('觀察模式')
     elif status == 'reject':
         adapt['bias'] -= 0.14
         adapt['notes'].append('绛栫暐寮卞嫝')
@@ -9264,7 +8678,7 @@ def _ai_adaptive_scoring_profile(symbol='', regime='neutral', setup='', side=0, 
         adapt['notes'].append('涓堡鍥為€€')
     else:
         adapt['bias'] += 0.03
-        adapt['notes'].append('灞€閮ㄦ帴绠?)
+        adapt['notes'].append('局部接管')
 
     if rr_ratio >= 2.0:
         adapt['w_rr'] += 0.05 * learn_power
@@ -9282,7 +8696,7 @@ def _ai_adaptive_scoring_profile(symbol='', regime='neutral', setup='', side=0, 
 
 
 def _grade_signal_v6(direction_conf, setup_q, rr, anti_chase_penalty, htf_penalty):
-    """绛夌礆鍙仛鏈€鍩虹椤ず锛屼富楂旇鍒嗙敱 AI 鏈€绲傚垎鏁告帶鍒躲€?""
+    # 只保留基礎提示，最後決策由 AI 控制。
     dc = max(0.0, min(float(direction_conf or 0.0), 10.0))
     sq = max(0.0, min(float(setup_q or 0.0), 10.0))
     rrv = max(0.0, min(float(rr or 0.0), 3.5))
@@ -9328,17 +8742,18 @@ def analyze_legacy_shadow_2(symbol):
 
         side, direction_conf, direction_label, direction_strong, adx15, adx4 = _direction_profile_v6(d15, d4h, d1d)
         direction_conf_view = max(0.0, min(10.0, direction_conf * 2.2 + max(adx15 - 15.0, 0.0) * 0.08 + max(adx4 - 15.0, 0.0) * 0.05 + (0.8 if direction_strong else 0.0)))
-        breakdown['鏂瑰悜淇″績'] = round(direction_conf_view, 1)
+        breakdown['????'] = round(direction_conf_view, 1)
         breakdown['ADX15'] = round(adx15, 1)
         breakdown['ADX4H'] = round(adx4, 1)
         tags.append(direction_label)
 
         if side == 0:
-            return 0, '闇囩洩閬庢烤|鏂瑰悜涓嶈冻', curr, 0, 0, 0, {'鏂瑰悜淇″績':0, 'Setup':'NoTrade', '绛夌礆':'D'}, atr, atr15, atr4h, 2.0, 3.0
+            return 0, '????|???', curr, 0, 0, 0, {'????':0, 'Setup':'NoTrade', '???':'D'}, atr, atr15, atr4h, 2.0, 3.0
 
         setup = _best_setup_v6(d15, side)
         if not setup:
-            # 娌掓湁鏄庣⒑瑙哥櫦锛岀董鎸佽瀵燂紱AI 浠嶅彲渚濇鍙茶〃鐝惧井瑾跨瓑寰呭垎鏁革紝閬垮厤鏁存壒瑷婅櫉闀锋湡鍍垫銆?            wait_profile = _ai_adaptive_scoring_profile(symbol, regime='neutral', setup='wait', side=side, direction_conf_view=direction_conf_view, setup_q=0.0, rr_ratio=1.15)
+            # ??????????????????????????
+            wait_profile = _ai_adaptive_scoring_profile(symbol, regime='neutral', setup='wait', side=side, direction_conf_view=direction_conf_view, setup_q=0.0, rr_ratio=1.15)
             base = 22 + direction_conf_view * (3.7 + max(wait_profile.get('w_dir', 6.9) - 6.9, -0.6)) + max(adx15 - 18.0, 0.0) * 0.32 + float(wait_profile.get('bias', 0.0) or 0.0)
             capped = min(base, 44)
             wait_quality = round(max(2.2, min(6.8, direction_conf_view * 0.44 + max(adx15 - 16.0, 0.0) * 0.08 + max(adx4 - 16.0, 0.0) * 0.05 + float(wait_profile.get('quality_adj', 0.0) or 0.0) * 0.18)), 2)
@@ -9346,11 +8761,11 @@ def analyze_legacy_shadow_2(symbol):
             wait_regime_conf = round(max(0.0, min(direction_conf_view * 8.5 + max(adx15 - 14.0, 0.0) * 1.08 + float(wait_profile.get('bias', 0.0) or 0.0) * 0.9, 99.0)), 1)
             wait_direction = round(max(direction_conf_view * 0.62 + wait_trend_conf / 21.0 + wait_regime_conf / 25.0, wait_trend_conf / 10.8, wait_regime_conf / 11.8), 1)
             wait_grade = _grade_signal_v6(wait_direction, wait_quality, 1.15, 0, 0)
-            return side * capped, '鏂瑰悜鏈変絾鏈埌瑙哥櫦浣峾绛夊緟鍥炶俯/绐佺牬纰鸿獚', curr, 0, 0, 0, {
-                '鏂瑰悜淇″績': wait_direction, 'Setup':'绛夊緟瑙哥櫦', '閫插牬鍝佽唱': wait_quality, 'RR':0, '绛夌礆':wait_grade,
+            return side * capped, '?????????????????/????', curr, 0, 0, 0, {
+                '????': wait_direction, 'Setup':'??????', '??????': wait_quality, 'RR':0, '???':wait_grade,
                 'TrendConfidence': wait_trend_conf,
                 'RegimeConfidence': wait_regime_conf,
-                'AI瑭曞垎妯″紡': '|'.join((wait_profile.get('notes') or [])[:3]),
+                'AI????': '|'.join((wait_profile.get('notes') or [])[:3]),
             }, atr, atr15, atr4h, 2.0, 3.0
 
         setup_label = setup['setup_label']
@@ -9489,15 +8904,15 @@ def analyze_legacy_shadow_2(symbol):
         trend_conf_val = round(max(0.0, min(99.0, (dir_feat * float(ai_adapt.get('w_dir', 1.0) or 1.0) + setup_feat * float(ai_adapt.get('w_setup', 1.0) or 1.0) + rr_feat * float(ai_adapt.get('w_rr', 1.0) or 1.0) - anti_feat * float(ai_adapt.get('w_anti', 1.0) or 1.0) * 0.6 - htf_feat * float(ai_adapt.get('w_htf', 1.0) or 1.0) * 0.45) / max((float(ai_adapt.get('w_dir', 1.0) or 1.0) + float(ai_adapt.get('w_setup', 1.0) or 1.0) + float(ai_adapt.get('w_rr', 1.0) or 1.0) + float(ai_adapt.get('w_anti', 1.0) or 1.0) * 0.6 + float(ai_adapt.get('w_htf', 1.0) or 1.0) * 0.45), 1e-9) * 100.0)), 1)
         regime_conf_val = round(max(0.0, min(99.0, (dir_feat * 0.65 + momentum_feat * 0.22 + rr_feat * 0.18 - htf_feat * 0.14 - anti_feat * 0.12 + float(ai_adapt.get('bias', 0.0) or 0.0) * 0.2) * 100.0)), 1)
         direction_display = round(max(direction_conf_view, trend_conf_val / 10.0, regime_conf_val / 10.5), 1)
-        breakdown['鏂瑰悜淇″績'] = round(max(direction_display, 0.0), 1)
+        breakdown['????'] = round(max(direction_display, 0.0), 1)
         breakdown['TrendConfidence'] = trend_conf_val
         breakdown['RegimeConfidence'] = regime_conf_val
         breakdown['RegimeBias'] = side * round(direction_conf_view, 2)
-        breakdown['杩藉児棰ㄩ毆'] = -anti_chase_penalty if side > 0 else anti_chase_penalty
-        breakdown['楂橀殠浣嶉殠澹撳姏'] = -htf_penalty if side > 0 else htf_penalty
-        breakdown['绛夌礆'] = grade
-        breakdown['杓斿姪鍥犲瓙'] = helper if side > 0 else -helper
-        breakdown['AI瑭曞垎妯″紡'] = '|'.join((ai_adapt.get('notes') or [])[:4])
+        breakdown['??????'] = -anti_chase_penalty if side > 0 else anti_chase_penalty
+        breakdown['?????????'] = -htf_penalty if side > 0 else htf_penalty
+        breakdown['???'] = grade
+        breakdown['??????'] = helper if side > 0 else -helper
+        breakdown['AI????'] = '|'.join((ai_adapt.get('notes') or [])[:4])
         breakdown['AI娆婇噸'] = {
             'dir': round(float(ai_adapt.get('w_dir', 1.0) or 1.0), 2),
             'setup': round(float(ai_adapt.get('w_setup', 1.0) or 1.0), 2),
@@ -10726,7 +10141,7 @@ def get_regime_params(regime):
     with AI_LOCK:
         return dict(AI_DB.get('param_sets', {}).get(regime, AI_DB.get('param_sets', {}).get('neutral', {})))
 
-# 鍩哄簳鍒ュ悕锛氫繚鐣?v1 鍋氱偤搴曞堡鐗瑰镜鐢㈢敓鍣紱鐪熸灏嶅 analyze / backtest 鏈冨湪寰屾缍佸埌澧炲挤鐗?_BASE_ANALYZE = analyze_legacy_shadow_1
+# Preserve v1 analyze/backtest bases before overriding with enhanced versions
 _BASE_LEARN_FROM_CLOSED_TRADE = learn_from_closed_trade_legacy_shadow_1
 _BASE_RUN_SIMPLE_BACKTEST = run_simple_backtest_legacy_shadow_1
 _BASE_API_STATE = api_state_legacy_shadow_1
@@ -11371,7 +10786,7 @@ def _apply_regime_to_signal(symbol, score, desc, entry, sl, tp, est_pnl, breakdo
     elif tempo == 'slow':
         new_sl_mult = min(max(new_sl_mult * 0.96, 1.15), 3.0)
         regime_rr_target = min(max(regime_rr_target * 0.94, 1.2), 3.2)
-        extra.append('鎱㈢瘈濂忔敹鏂傜洰妯?)
+        extra.append('???????')
 
     if regime == 'news' and conf >= 0.8:
         new_sl_mult = max(new_sl_mult, 2.4)
@@ -11648,7 +11063,7 @@ def _enhanced_auto_learn():
     try:
         db['ai_feature_model'] = _build_ai_feature_model_from_trades(recent_closed)
     except Exception as e:
-        print('AI鐗瑰镜妯″瀷鏇存柊澶辨晽:', e)
+        print('AI ????????:', e)
     db['last_learning'] = tw_now_str('%Y-%m-%d %H:%M:%S')
     save_ai_db(db)
     with AI_LOCK:
@@ -11673,7 +11088,7 @@ def run_simple_backtest_legacy_shadow_2(symbol='BTC/USDT:USDT', timeframe='15m',
     params = get_regime_params(regime.get('regime', 'neutral'))
     base['market_regime'] = regime
     base['ai_params'] = params
-    base['ai_comment'] = f"{symbol} 鐣跺墠灞柤 {regime.get('regime')}锛屽洖娓互 {regime.get('note')} 鍙冭€冭鍙?
+    base['ai_comment'] = f"{symbol} ???? {regime.get('regime')}?????? {regime.get('note')}"
     return base
 
 # 姝ｅ紡灏嶅缍佸畾鍒板寮风増锛岄伩鍏嶄粛钀藉洖 legacy v1
@@ -11689,9 +11104,9 @@ def run_multi_market_backtest(symbols=None):
     if not symbols:
         with AI_LOCK:
             AUTO_BACKTEST_STATE['running'] = False
-            AUTO_BACKTEST_STATE['summary'] = '鎵句笉鍒板彲鍥炴脯甯傚牬'
+            AUTO_BACKTEST_STATE['summary'] = '????????'
             AUTO_BACKTEST_STATE['scanned_markets'] = 0
-            AUTO_BACKTEST_STATE['errors'] = ['鐒″彲鐢ㄥ競鍫?]
+            AUTO_BACKTEST_STATE['errors'] = ['??????']
         update_state(ai_panel=dict(AI_PANEL), auto_backtest=dict(AUTO_BACKTEST_STATE))
         return []
 
@@ -11884,7 +11299,7 @@ def enhanced_position_thread():
 
 
 def extract_analysis_score(result):
-    """鐩稿 analyze() 涓嶅悓鍥炲偝鏍煎紡锛岀┅瀹氬彇鍑哄垎鏁搞€?""
+    # 從 analyze() 的結果中穩定抽取分數。
     try:
         if isinstance(result, (list, tuple)):
             if len(result) >= 1:
@@ -11899,7 +11314,7 @@ def extract_analysis_score(result):
 
 
 def sync_ai_state_to_dashboard(force_regime=False):
-    """鎶?AI 闈㈡澘/鍥炴脯鐙€鎱嬪挤鍒跺悓姝ラ€?STATE锛岄伩鍏嶅墠绔叏鏄?--銆?""
+    # 同步 AI 面板與回測狀態到 STATE。
     try:
         with AI_LOCK:
             ai_panel = dict(AI_PANEL)
@@ -12029,7 +11444,7 @@ def api_ai_db_stats():
 
 @app.route('/api/ai_learning_recent')
 def api_ai_learning_recent():
-    """鍥炲偝鏈€杩戝缈掑埌鐨勫鍠硣鏂欙紙寰?SQLite learning_trades 璁€鍙栵級"""
+    # 讀取最近學習樣本。
     limit_arg = request.args.get('limit', '20')
     try:
         limit = max(1, min(int(limit_arg), 200))
@@ -12046,7 +11461,7 @@ def api_ai_learning_recent():
 
 @app.route('/api/ai_symbol_stats')
 def api_ai_symbol_stats():
-    """鍥炲偝鍚勫梗瀛哥繏绛嗘暩鑸囧嫕鐜囷紝鏂逛究蹇€熸鏌?AI 瀛哥繏绲愭灉銆?""
+    # 讀取各幣學習統計與勝率。
     rows = []
     error = None
     try:
@@ -12143,7 +11558,7 @@ def _sqlite_order_clause(table_name, preferred_cols, fallback='rowid DESC'):
 
 @app.route('/api/ai_full_learning')
 def api_ai_full_learning():
-    """瀹屾暣瀛哥繏璩囨枡锛岄爯瑷渶杩?0绛嗭紝閬垮厤涓€娆℃拡澶ぇ閫犳垚鍗￠爴銆?""
+    # 讀取完整學習資料，限制最近 50 筆。
     limit = _api_limit(default=50, max_value=500)
     offset = _api_offset(default=0, max_value=5000)
     rows, error = [], None
@@ -12171,7 +11586,7 @@ def api_ai_full_learning():
 
 @app.route('/api/trade_history')
 def api_trade_history_records():
-    """鏈€杩戜氦鏄撶磤閷勶紝寰?SQLite trade_history 璁€鍙栥€?""
+    # 讀取最近交易記錄。
     limit = _api_limit(default=50, max_value=500)
     offset = _api_offset(default=0, max_value=5000)
     rows, error = [], None
@@ -12200,7 +11615,7 @@ def api_trade_history_records():
 
 @app.route('/api/risk_logs')
 def api_risk_logs():
-    """鏈€杩戦ⅷ鎺т簨浠剁磤閷勩€?""
+    # 讀取最近風控事件。
     limit = _api_limit(default=50, max_value=500)
     offset = _api_offset(default=0, max_value=5000)
     rows, error = [], None
@@ -12229,7 +11644,7 @@ def api_risk_logs():
 
 @app.route('/api/audit_logs')
 def api_audit_logs():
-    """鏈€杩戠郴绲辩ń鏍?鍋甸尟绱€閷勩€?""
+    # 讀取最近系統錯誤記錄。
     limit = _api_limit(default=50, max_value=500)
     offset = _api_offset(default=0, max_value=5000)
     rows, error = [], None
@@ -12258,7 +11673,7 @@ def api_audit_logs():
 
 @app.route('/api/backtest_runs')
 def api_backtest_runs():
-    """鏈€杩戝洖娓磤閷勩€?""
+    # 讀取最近回測記錄。
     limit = _api_limit(default=30, max_value=200)
     offset = _api_offset(default=0, max_value=2000)
     rows, error = [], None
@@ -12288,7 +11703,7 @@ def api_backtest_runs():
 
 @app.route('/api/ai_debug_last_decision')
 def api_ai_debug_last_decision():
-    """蹇€熺湅鏈€杩戣嚜鍕曚笅鍠?鏈笅鍠師鍥狅紝涓嶆敼鍕曚富娴佺▼锛屽彧璁€鍙栧揩鍙栫媭鎱嬨€?""
+    # 快速查看最近自動下單與未下單原因。
     try:
         with AUDIT_LOCK:
             audit_map = snapshot_mapping(AUTO_ORDER_AUDIT)
@@ -12433,7 +11848,7 @@ def api_state():
         return resp
 
 def reconcile_exchange_state():
-    """鍟熷嫊鏅傚悓姝ヤ氦鏄撴墍鐪熷鍊変綅鑸囨湰鍦颁繚璀风媭鎱嬶紝闄嶄綆鏈湴/浜ゆ槗鎵€涓嶅悓姝ラⅷ闅€?""
+    """啟動時同步交易所真實倉位與本地保護狀態，降低本地/交易所不同步風險。"""
     try:
         positions = exchange.fetch_positions()
     except Exception as e:
@@ -12553,8 +11968,8 @@ def _is_soft_execution_pause(gate):
         gate = dict(gate or {})
         reasons = [str(x) for x in (gate.get('reasons') or [])]
         joined = ' | '.join(reasons).lower()
-        hard_words = ['api', 'timeout', 'offline', 'network', 'schema', 'error', '淇濊鍠?, 'maintenance', '鍋滄', 'stale']
-        soft_words = ['娣卞害閬庤杽', 'depth', 'spread', '婊戝児', '钖?, 'liquidity', 'orderbook']
+        hard_words = ['api', 'timeout', 'offline', 'network', 'schema', 'error', '保護', 'maintenance', '停機', 'stale']
+        soft_words = ['深度過薄', 'depth', 'spread', '滑價', '流動性', 'liquidity', 'orderbook']
         if any(w in joined for w in hard_words):
             return False
         return any(w.lower() in joined for w in soft_words)
@@ -12577,8 +11992,8 @@ def apply_execution_guard(symbol, side, margin_pct):
                 softened_gate['softened'] = True
                 softened_gate['score_penalty'] = max(float(softened_gate.get('score_penalty', 0.0) or 0.0), 6.0)
                 reasons = list(softened_gate.get('reasons') or [])
-                if '娣卞害鍋忚杽锛屾敼鎵ｅ垎闄嶅€夎檿鐞? not in reasons:
-                    reasons.append('娣卞害鍋忚杽锛屾敼鎵ｅ垎闄嶅€夎檿鐞?)
+                if '深度偏薄，改為扣分降倉處理' not in reasons:
+                    reasons.append('深度偏薄，改為扣分降倉處理')
                 softened_gate['reasons'] = reasons
                 mp = float(margin_pct or 0) * min(float(softened_gate.get('margin_mult', 1.0) or 1.0), 0.42)
                 return {'allow': True, 'margin_pct': mp, 'snapshot': snap, 'gate': softened_gate}
@@ -12587,7 +12002,13 @@ def apply_execution_guard(symbol, side, margin_pct):
         return {'allow': True, 'margin_pct': mp, 'snapshot': snap, 'gate': gate}
     except Exception as e:
         API_ERROR_STREAK = min(API_ERROR_STREAK + 1, 10)
-        softened_gate = {'action': 'penalty', 'softened': True, 'score_penalty': 7.0, 'margin_mult': 0.38, 'reasons': ['execution guard error', 'execution guard 澶辨晽鏀圭偤闄嶅€夋墸鍒?]}
+        softened_gate = {
+            'action': 'penalty',
+            'softened': True,
+            'score_penalty': 7.0,
+            'margin_mult': 0.38,
+            'reasons': ['execution guard error', 'execution guard 失敗，改為降倉扣分'],
+        }
         mp = float(margin_pct or 0) * float(softened_gate.get('margin_mult', 0.38) or 0.38)
         return {'allow': True, 'margin_pct': mp, 'snapshot': {'error': str(e)}, 'gate': softened_gate}
 
