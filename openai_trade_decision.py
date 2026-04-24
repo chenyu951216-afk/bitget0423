@@ -1353,14 +1353,14 @@ def consult_trade_decision(
             est_cost_twd = est_cost_usd * float(config.get('usd_to_twd', 32.0) or 32.0)
             detail = 'OpenAI returned no parseable trade JSON after retries: {}'.format(' ; '.join(empty_details))
             symbol_state.update({
-                'last_payload_hash': payload_hash,
-                'last_sent_ts': now_ts,
                 'last_model': selected_model,
                 'last_decision': {},
                 'last_status': 'empty_response',
                 'last_response_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 'last_cost_twd': round(est_cost_twd, 4),
                 'last_attempt': dict(selected_attempt),
+                'last_empty_response_ts': now_ts,
+                'last_empty_payload_hash': payload_hash,
                 'last_error': detail[:300],
             })
             state.setdefault('symbols', {})[symbol] = symbol_state
@@ -1368,8 +1368,6 @@ def consult_trade_decision(
             state['input_tokens'] = int(state.get('input_tokens', 0) or 0) + total_input_tokens
             state['output_tokens'] = int(state.get('output_tokens', 0) or 0) + total_output_tokens
             state['cached_input_tokens'] = int(state.get('cached_input_tokens', 0) or 0) + total_cached_input_tokens
-            state['last_consulted_ts'] = now_ts
-            state['last_top_candidates_signature'] = top_signature
             state['spent_estimated_usd'] = round(float(state.get('spent_estimated_usd', 0.0) or 0.0) + est_cost_usd, 6)
             state['spent_estimated_twd'] = round(float(state.get('spent_estimated_twd', 0.0) or 0.0) + est_cost_twd, 4)
             state['last_error'] = detail[:300]
