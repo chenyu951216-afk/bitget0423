@@ -127,6 +127,26 @@ def _short_text(value: Any, limit: int = 180) -> str:
     return str(value or '').replace('\n', ' ').strip()[:max(int(limit), 1)]
 
 
+def _compact_number(value: Any) -> Any:
+    if isinstance(value, bool) or value is None:
+        return value
+    if isinstance(value, int):
+        return value
+    try:
+        number = float(value)
+    except Exception:
+        return value
+    if not math.isfinite(number):
+        return 0.0
+    if abs(number) >= 100000:
+        return round(number, 0)
+    if abs(number) >= 1000:
+        return round(number, 2)
+    if abs(number) >= 1:
+        return round(number, 4)
+    return round(number, 6)
+
+
 def _string_schema(max_length: int) -> Dict[str, Any]:
     return {'type': 'string', 'maxLength': max(int(max_length or 1), 1)}
 
@@ -147,11 +167,20 @@ def _compact_mapping(data: Dict[str, Any], keys: list[str], *, text_limit: int =
             continue
         value = src.get(key)
         if isinstance(value, (int, float, bool)) or value is None:
-            out[key] = value
+            out[key] = _compact_number(value)
         elif isinstance(value, list):
-            out[key] = [_short_text(x, text_limit) for x in value[:5]]
+            compact_list = []
+            for item in value[:5]:
+                if isinstance(item, (int, float, bool)) or item is None:
+                    compact_list.append(_compact_number(item))
+                else:
+                    compact_list.append(_short_text(item, text_limit))
+            out[key] = compact_list
         elif isinstance(value, dict):
-            out[key] = {str(k): _short_text(v, text_limit) for k, v in list(value.items())[:10]}
+            out[key] = {
+                str(k): (_compact_number(v) if isinstance(v, (int, float, bool)) or v is None else _short_text(v, text_limit))
+                for k, v in list(value.items())[:10]
+            }
         else:
             out[key] = _short_text(value, text_limit)
     return out
@@ -305,53 +334,45 @@ def build_candidate_payload(
         ['machine_entry_hint', 'machine_stop_loss_hint', 'machine_take_profit_hint', 'machine_rr_hint', 'machine_est_pnl_pct_hint', 'note'],
         text_limit=180,
     )
+    compact_top_candidates = []
+    for row in list(top_candidates or [])[:3]:
+        compact_top_candidates.append(
+            _compact_mapping(
+                dict(row or {}),
+                ['symbol', 'side', 'score', 'priority_score', 'entry_quality', 'rr_ratio', 'candidate_source'],
+                text_limit=60,
+            )
+        )
     return {
         'symbol': str(signal.get('symbol') or ''),
         'side': 'long' if float(signal.get('score', 0) or 0) >= 0 else 'short',
         'trade_style': str(constraints.get('trade_style') or style.get('holding_period') or 'short_term_intraday'),
-        'signal_desc': _short_text(signal.get('desc'), 240),
         'candidate_source': str(signal.get('candidate_source') or signal.get('source') or 'normal')[:80],
         'scanner_intent': str(signal.get('scanner_intent') or '')[:180],
-        'short_gainer_context': _compact_mapping(dict(signal.get('short_gainer_context') or {}), ['pct_24h', 'rank_score', 'quote_volume', 'spread_pct', 'ticker_last'], text_limit=80),
         'rank': int(rank_index) + 1,
-        'score': _round(signal.get('score'), 4),
-        'raw_score': _round(signal.get('raw_score', signal.get('score')), 4),
-        'priority_score': _round(signal.get('priority_score', abs(float(signal.get('score', 0) or 0))), 4),
-        'current_price': _round(signal.get('price'), 8),
-        'entry_quality': _round(signal.get('entry_quality', breakdown.get('EntryGate')), 4),
-        'est_pnl_pct': _round(signal.get('est_pnl'), 4),
-        'regime': str(signal.get('regime') or breakdown.get('Regime') or 'neutral'),
-        'regime_confidence': _round(signal.get('regime_confidence'), 4),
+        'priority_score': _compact_number(signal.get('priority_score', abs(float(signal.get('score', 0) or 0)))),
+        'current_price': _compact_number(signal.get('price')),
+        'entry_quality': _compact_number(signal.get('entry_quality', breakdown.get('EntryGate'))),
         'setup_label': str(signal.get('setup_label') or breakdown.get('Setup') or ''),
         'signal_grade': str(signal.get('signal_grade') or breakdown.get('等級') or ''),
-        'trend_confidence': _round(signal.get('trend_confidence'), 4),
-        'rotation_adj': _round(signal.get('rotation_adj'), 4),
-        'breakdown': compact_breakdown,
-        'execution_quality': _compact_mapping(execution_quality, ['execution_score', 'score', 'label', 'spread_pct', 'depth5', 'mark_last_dev_pct', 'penalty', 'reasons'], text_limit=120),
-        'market': {
-            'pattern': str(market.get('pattern') or ''),
-            'direction': str(market.get('direction') or ''),
-            'strength': _round(market.get('strength'), 4),
-            'prediction': _short_text(market.get('prediction'), 180),
-        },
         'market_context': compact_market_context,
         'reference_trade_plan': compact_reference_trade_plan,
         'risk': {
             'trading_ok': bool(risk_status.get('trading_ok', True)),
             'halt_reason': str(risk_status.get('halt_reason') or '')[:180],
-            'daily_loss_pct': _round(risk_status.get('daily_loss_pct'), 4),
+            'daily_loss_pct': _compact_number(risk_status.get('daily_loss_pct')),
             'consecutive_loss': int(risk_status.get('consecutive_loss', 0) or 0),
         },
         'portfolio': {
-            'equity': _round(portfolio.get('equity'), 4),
+            'equity': _compact_number(portfolio.get('equity')),
             'active_position_count': int(portfolio.get('active_position_count', 0) or 0),
             'same_direction_count': int(portfolio.get('same_direction_count', 0) or 0),
             'open_symbols': list(portfolio.get('open_symbols') or [])[:8],
         },
         'execution_policy': _compact_mapping(execution_policy, ['fixed_leverage', 'leverage_mode', 'min_order_margin_usdt', 'fixed_order_notional_usdt', 'margin_pct_range'], text_limit=80),
         'reference_context': compact_reference,
-        'top_candidates': list(top_candidates or [])[:3],
-        'constraints': dict(constraints or {}),
+        'top_candidates': compact_top_candidates,
+        'constraints': _compact_mapping(dict(constraints or {}), ['min_margin_pct', 'max_margin_pct', 'min_leverage', 'max_leverage', 'fixed_leverage', 'leverage_policy', 'min_order_margin_usdt', 'fixed_order_notional_usdt', 'trade_style', 'max_open_positions', 'max_same_direction'], text_limit=60),
         'force_recheck': bool(signal.get('force_openai_recheck', False)),
     }
 
@@ -397,11 +418,11 @@ def _compact_timeframe_bars(timeframe_bars: Dict[str, Any]) -> Dict[str, Any]:
                 continue
             try:
                 compact_rows.append([
-                    round(float(row[1]), 8),
-                    round(float(row[2]), 8),
-                    round(float(row[3]), 8),
-                    round(float(row[4]), 8),
-                    round(float(row[5]), 4),
+                    _compact_number(row[1]),
+                    _compact_number(row[2]),
+                    _compact_number(row[3]),
+                    _compact_number(row[4]),
+                    _compact_number(row[5]),
                 ])
             except Exception:
                 continue
@@ -620,7 +641,35 @@ def _json_schema() -> Dict[str, Any]:
         'type': 'object',
         'additionalProperties': False,
         'properties': properties,
-        'required': list(properties.keys()),
+        'required': [
+            'should_trade',
+            'order_type',
+            'entry_price',
+            'stop_loss',
+            'take_profit',
+            'market_read',
+            'entry_plan',
+            'entry_reason',
+            'stop_loss_reason',
+            'take_profit_plan',
+            'if_missed_plan',
+            'reference_summary',
+            'chase_if_triggered',
+            'chase_trigger_price',
+            'chase_limit_price',
+            'leverage',
+            'margin_pct',
+            'confidence',
+            'thesis',
+            'reason_to_skip',
+            'risk_notes',
+            'aggressive_note',
+            'watch_trigger_type',
+            'watch_trigger_price',
+            'watch_invalidation_price',
+            'watch_note',
+            'recheck_reason',
+        ],
     }
 
 
