@@ -8180,11 +8180,12 @@ def scan_thread():
                     openai_panel = sync_openai_trade_state(push_runtime=False)
                     normal_rank_index = int(best.get('_normal_rank_index', rank_index) or rank_index)
                     hard_gate_reasons = []
+                    soft_gate_reasons = []
                     symbol_cooldown_gate_reason = ''
                     if not mkt_ok:
-                        hard_gate_reasons.append('大盤方向不一致')
+                        soft_gate_reasons.append('大盤方向不一致')
                     if not side_ok:
-                        hard_gate_reasons.append('方向偏差不一致')
+                        soft_gate_reasons.append('方向偏差不一致')
                     if same_dir_cnt_now >= MAX_SAME_DIRECTION:
                         hard_gate_reasons.append('同方向持倉已滿')
                     if best['symbol'] in pos_syms:
@@ -8196,7 +8197,7 @@ def scan_thread():
                     if not can_reenter_symbol(best['symbol']):
                         hard_gate_reasons.append(get_symbol_cooldown_note(best['symbol']) or '同幣冷卻中')
                     if not best.get('allowed', True):
-                        hard_gate_reasons.append('該幣歷史表現被封鎖')
+                        soft_gate_reasons.append('該幣歷史表現被封鎖')
 
                     openai_mode_active = bool(OPENAI_TRADE_CONFIG.get('enabled', True) and OPENAI_API_KEY)
                     if not openai_mode_active and rank_index >= MAX_OPEN_POSITIONS:
@@ -8326,6 +8327,8 @@ def scan_thread():
                     reasons = list(dict.fromkeys((ai_decision.get('reasons') or []) + (reasons or [])))
                     if hard_gate_reasons:
                         reasons.extend(hard_gate_reasons)
+                    if soft_gate_reasons:
+                        reasons.extend(soft_gate_reasons)
                     if openai_mode_active:
                         reasons.append('OpenAI候選輪轉前{}名，本輪最多送{}個'.format(openai_rank_limit, openai_sends_per_scan))
                         if openai_status == 'not_ranked':
