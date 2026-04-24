@@ -5,6 +5,7 @@ import os
 import threading
 import time
 import traceback
+import json
 from datetime import datetime
 from typing import Any, Dict, List
 
@@ -39,10 +40,17 @@ SNAPSHOT_STATE_PATH = os.path.join(DATA_DIR, "runtime_snapshot.json")
 SCAN_INTERVAL_SEC = max(45, int(float(env_or_blank("SCAN_INTERVAL_SEC", "75") or 75)))
 POSITION_INTERVAL_SEC = max(15, int(float(env_or_blank("POSITION_INTERVAL_SEC", "25") or 25)))
 OPENAI_SYNC_INTERVAL_SEC = max(20, int(float(env_or_blank("OPENAI_SYNC_INTERVAL_SEC", "30") or 30)))
-SCAN_SYMBOL_LIMIT = max(4, min(12, int(float(env_or_blank("SCAN_SYMBOL_LIMIT", "6") or 6))))
-TOP_SIGNAL_LIMIT = max(4, min(12, int(float(env_or_blank("TOP_SIGNAL_LIMIT", "8") or 8))))
+SCAN_SYMBOL_LIMIT = max(8, min(36, int(float(env_or_blank("SCAN_SYMBOL_LIMIT", "18") or 18))))
+TOP_SIGNAL_LIMIT = max(5, min(15, int(float(env_or_blank("TOP_SIGNAL_LIMIT", "10") or 10))))
 TIMEFRAME_BAR_LIMIT = max(100, min(240, int(float(env_or_blank("SCAN_BAR_LIMIT", "120") or 120))))
 ACTIVE_HISTORY_LIMIT = 40
+GENERAL_TOP_PICK = 5
+SHORT_GAINER_TOP_PICK = 3
+SHORT_GAINER_MIN_24H_PCT = max(20.0, float(env_or_blank("SHORT_GAINER_MIN_24H_PCT", "40") or 40))
+MAX_OPEN_POSITIONS = 5
+AI_SKIP_COOLDOWN_SEC = 60 * 60
+FIXED_ORDER_NOTIONAL_USDT = max(5.0, float(env_or_blank("FIXED_ORDER_NOTIONAL_USDT", "40") or 40))
+MIN_SYMBOL_QUOTE_VOLUME = max(100_000.0, float(env_or_blank("SCAN_MIN_QUOTE_VOLUME", "300000") or 300000))
 
 TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"]
 DEFAULT_PARAMS = {
@@ -70,15 +78,24 @@ exchange.timeout = 15000
 STATE_LOCK = threading.RLock()
 OPENAI_LOCK = threading.RLock()
 WORKER_LOCK = threading.RLock()
+ORDER_LOCK = threading.RLock()
+REVIEW_LOCK = threading.RLock()
 
 WORKERS_STARTED = False
 OPENAI_API_KEY = env_or_blank("OPENAI_API_KEY")
 OPENAI_TRADE_CONFIG = default_trade_config(lambda name, default="": env_or_blank(name, default))
+OPENAI_TRADE_CONFIG["cooldown_minutes"] = min(int(OPENAI_TRADE_CONFIG.get("cooldown_minutes", 60) or 60), 60)
+OPENAI_TRADE_CONFIG["same_payload_reuse_minutes"] = min(int(OPENAI_TRADE_CONFIG.get("same_payload_reuse_minutes", 60) or 60), 60)
+OPENAI_TRADE_CONFIG["global_min_interval_minutes"] = 0
+OPENAI_TRADE_CONFIG["top_k_per_scan"] = GENERAL_TOP_PICK
+OPENAI_TRADE_CONFIG["sends_per_scan"] = 1
+OPENAI_TRADE_CONFIG["min_score_abs"] = max(float(OPENAI_TRADE_CONFIG.get("min_score_abs", 48.0) or 48.0), 48.0)
 OPENAI_TRADE_STATE = load_trade_state(OPENAI_TRADE_STATE_PATH)
 MARKET_CAP_CACHE: Dict[str, Dict[str, Any]] = {}
 MARKET_CAP_CACHE_TS: Dict[str, float] = {}
 DERIVATIVES_CACHE: Dict[str, Dict[str, Any]] = {}
 DERIVATIVES_CACHE_TS: Dict[str, float] = {}
+REVIEW_TRACKER: Dict[str, Dict[str, Any]] = {}
 
 
 def tw_now_str(fmt: str = "%Y-%m-%d %H:%M:%S") -> str:
@@ -106,6 +123,91 @@ def clamp(value: Any, low: float, high: float) -> float:
 
 def compact_symbol(symbol: str) -> str:
     return str(symbol or "").replace("/USDT:USDT", "USDT").replace("/USDT", "USDT")
+
+
+def base_asset(symbol: str) -> str:
+    token = compact_symbol(symbol)
+    if token.endswith("USDT"):
+        token = token[:-4]
+    return token.upper()
+
+
+def now_ts() -> float:
+    return time.time()
+
+
+def pct_change(current: float, previous: float) -> float:
+    current = safe_float(current, 0.0)
+    previous = safe_float(previous, 0.0)
+    if previous <= 0:
+        return 0.0
+    return ((current / previous) - 1.0) * 100.0
+
+
+def linear_score(value: float, low: float, high: float) -> float:
+    if high <= low:
+        return 0.0
+    return clamp(((safe_float(value, low) - low) / (high - low)) * 100.0, 0.0, 100.0)
+
+
+def extract_recent_bars(context: Dict[str, Any], timeframe: str, limit: int = 12) -> List[Dict[str, Any]]:
+    rows = list((context.get("timeframe_bars") or {}).get(timeframe) or [])
+    return [dict(row or {}) for row in rows[-max(limit, 1):]]
+
+
+def candle_shape_metrics(bar: Dict[str, Any]) -> Dict[str, float]:
+    high = safe_float(bar.get("high"), 0.0)
+    low = safe_float(bar.get("low"), 0.0)
+    open_price = safe_float(bar.get("open"), 0.0)
+    close_price = safe_float(bar.get("close"), 0.0)
+    candle_range = max(high - low, 1e-9)
+    body = abs(close_price - open_price)
+    upper_wick = max(high - max(open_price, close_price), 0.0)
+    lower_wick = max(min(open_price, close_price) - low, 0.0)
+    return {
+        "range": candle_range,
+        "body_pct": (body / candle_range) * 100.0,
+        "upper_wick_pct": (upper_wick / candle_range) * 100.0,
+        "lower_wick_pct": (lower_wick / candle_range) * 100.0,
+    }
+
+
+def count_monotonic(values: List[float], direction: str) -> int:
+    total = 0
+    for idx in range(1, len(values)):
+        if direction == "up" and values[idx] > values[idx - 1]:
+            total += 1
+        if direction == "down" and values[idx] < values[idx - 1]:
+            total += 1
+    return total
+
+
+def structure_profile(context: Dict[str, Any], timeframe: str = "15m") -> Dict[str, Any]:
+    bars = extract_recent_bars(context, timeframe, 8)
+    highs = [safe_float(row.get("high"), 0.0) for row in bars]
+    lows = [safe_float(row.get("low"), 0.0) for row in bars]
+    closes = [safe_float(row.get("close"), 0.0) for row in bars]
+    hh = count_monotonic(highs[-5:], "up")
+    hl = count_monotonic(lows[-5:], "up")
+    lh = count_monotonic(highs[-5:], "down")
+    ll = count_monotonic(lows[-5:], "down")
+    upper_wicks = sum(1 for row in bars[-3:] if candle_shape_metrics(row)["upper_wick_pct"] >= 40.0)
+    lower_wicks = sum(1 for row in bars[-3:] if candle_shape_metrics(row)["lower_wick_pct"] >= 40.0)
+    last_close = closes[-1] if closes else 0.0
+    prior_high = max(highs[:-1], default=last_close)
+    prior_low = min(lows[:-1], default=last_close)
+    return {
+        "hh_count": hh,
+        "hl_count": hl,
+        "lh_count": lh,
+        "ll_count": ll,
+        "upper_wick_count": upper_wicks,
+        "lower_wick_count": lower_wicks,
+        "close_above_prior_high": bool(last_close > prior_high and prior_high > 0),
+        "close_below_prior_low": bool(last_close < prior_low and prior_low > 0),
+        "prior_high": prior_high,
+        "prior_low": prior_low,
+    }
 
 
 def default_backend_threads() -> Dict[str, Dict[str, Any]]:
@@ -165,6 +267,9 @@ STATE: Dict[str, Any] = {
     "trailing_info": {},
     "protection_state": {},
     "top_signals": [],
+    "general_top_signals": [],
+    "short_gainer_signals": [],
+    "watchlist": [],
     "active_positions": [],
     "trade_history": [],
     "backend_threads": default_backend_threads(),
@@ -214,11 +319,18 @@ def persist_runtime_snapshot() -> None:
         "state": {
             "trade_history": list(STATE.get("trade_history", []))[-ACTIVE_HISTORY_LIMIT:],
             "latest_news_title": STATE.get("latest_news_title", ""),
+            "watchlist": list(STATE.get("watchlist", []))[:20],
+            "fvg_orders": dict(STATE.get("fvg_orders") or {}),
+            "general_top_signals": list(STATE.get("general_top_signals", []))[:GENERAL_TOP_PICK],
+            "short_gainer_signals": list(STATE.get("short_gainer_signals", []))[:SHORT_GAINER_TOP_PICK],
+        },
+        "review_tracker": {
+            key: value
+            for key, value in list(REVIEW_TRACKER.items())[:80]
+            if isinstance(value, dict)
         }
     }
     try:
-        import json
-
         with open(SNAPSHOT_STATE_PATH, "w", encoding="utf-8") as fh:
             json.dump(payload, fh, ensure_ascii=False, indent=2)
     except Exception:
@@ -226,11 +338,10 @@ def persist_runtime_snapshot() -> None:
 
 
 def load_runtime_snapshot() -> None:
+    global REVIEW_TRACKER
     if not os.path.exists(SNAPSHOT_STATE_PATH):
         return
     try:
-        import json
-
         with open(SNAPSHOT_STATE_PATH, "r", encoding="utf-8") as fh:
             payload = json.load(fh) or {}
         base = dict(payload.get("state") or {})
@@ -239,6 +350,16 @@ def load_runtime_snapshot() -> None:
                 STATE["trade_history"] = list(base["trade_history"])[-ACTIVE_HISTORY_LIMIT:]
             if base.get("latest_news_title"):
                 STATE["latest_news_title"] = str(base["latest_news_title"])
+            if isinstance(base.get("watchlist"), list):
+                STATE["watchlist"] = list(base["watchlist"])[:20]
+            if isinstance(base.get("fvg_orders"), dict):
+                STATE["fvg_orders"] = dict(base["fvg_orders"])
+            if isinstance(base.get("general_top_signals"), list):
+                STATE["general_top_signals"] = list(base["general_top_signals"])[:GENERAL_TOP_PICK]
+            if isinstance(base.get("short_gainer_signals"), list):
+                STATE["short_gainer_signals"] = list(base["short_gainer_signals"])[:SHORT_GAINER_TOP_PICK]
+        if isinstance(payload.get("review_tracker"), dict):
+            REVIEW_TRACKER = dict(payload["review_tracker"])
     except Exception:
         pass
 
@@ -639,12 +760,18 @@ def build_derivatives_context(symbol: str, ticker: Dict[str, Any]) -> Dict[str, 
     return dict(result)
 
 
-def infer_setup(tf15: Dict[str, Any], tf1h: Dict[str, Any], tf4h: Dict[str, Any]) -> str:
-    if tf15.get("trend_label") == "uptrend" and tf1h.get("trend_label") == "uptrend":
-        return "trend_pullback_long"
-    if tf15.get("trend_label") == "downtrend" and tf1h.get("trend_label") == "downtrend":
-        return "trend_pullback_short"
-    if safe_float(tf15.get("bb_width_pct"), 0.0) < 3 and safe_float(tf15.get("adx"), 0.0) < 20:
+def infer_setup(tf15: Dict[str, Any], tf1h: Dict[str, Any], tf4h: Dict[str, Any], side: str, structure: Dict[str, Any], risk_score: float) -> str:
+    if side == "short" and risk_score >= 50:
+        return "reversal_short"
+    if side == "long" and tf15.get("ema20", 0) > tf15.get("ema50", 0) > tf15.get("ema200", 0) and tf1h.get("ema20", 0) > tf1h.get("ema50", 0):
+        return "trend_continuation_long"
+    if side == "short" and tf15.get("ema20", 0) < tf15.get("ema50", 0) < tf15.get("ema200", 0) and tf1h.get("ema20", 0) < tf1h.get("ema50", 0):
+        return "trend_continuation_short"
+    if structure.get("close_above_prior_high"):
+        return "breakout_long"
+    if structure.get("close_below_prior_low"):
+        return "breakdown_short"
+    if safe_float(tf15.get("bb_width_pct"), 0.0) < 3.2 and safe_float(tf15.get("adx"), 0.0) < 20:
         return "compression_watch"
     if tf4h.get("trend_label") == "uptrend":
         return "higher_timeframe_long"
@@ -653,110 +780,377 @@ def infer_setup(tf15: Dict[str, Any], tf1h: Dict[str, Any], tf4h: Dict[str, Any]
     return "range_watch"
 
 
-def build_signal_from_context(symbol: str, market: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+def score_trend_component(side: str, context: Dict[str, Any], structure: Dict[str, Any]) -> Dict[str, Any]:
+    tf15 = dict((context.get("multi_timeframe") or {}).get("15m") or {})
+    tf1h = dict((context.get("multi_timeframe") or {}).get("1h") or {})
+    price = safe_float((context.get("basic_market_data") or {}).get("current_price"), 0.0)
+    score = 0.0
+    notes: List[str] = []
+    if side == "long":
+        if tf15.get("ema20", 0) > tf15.get("ema50", 0) > tf15.get("ema200", 0):
+            score += 28
+            notes.append("15m EMA stack bullish")
+        if tf1h.get("ema20", 0) > tf1h.get("ema50", 0):
+            score += 18
+            notes.append("1h trend aligned")
+        if safe_float(tf15.get("adx"), 0.0) > 20 and safe_float(tf15.get("plus_di"), 0.0) >= safe_float(tf15.get("minus_di"), 0.0):
+            score += 20
+        score += min(structure.get("hh_count", 0) * 8 + structure.get("hl_count", 0) * 8, 24)
+        if price > safe_float(tf15.get("vwap"), price):
+            score += 10
+    else:
+        if tf15.get("ema20", 0) < tf15.get("ema50", 0) < tf15.get("ema200", 0):
+            score += 28
+            notes.append("15m EMA stack bearish")
+        if tf1h.get("ema20", 0) < tf1h.get("ema50", 0):
+            score += 18
+            notes.append("1h trend aligned short")
+        if safe_float(tf15.get("adx"), 0.0) > 20 and safe_float(tf15.get("minus_di"), 0.0) >= safe_float(tf15.get("plus_di"), 0.0):
+            score += 20
+        score += min(structure.get("lh_count", 0) * 8 + structure.get("ll_count", 0) * 8, 24)
+        if price < safe_float(tf15.get("vwap"), price):
+            score += 10
+    return {"score": clamp(score, 0, 100), "notes": notes}
+
+
+def score_momentum_component(side: str, context: Dict[str, Any], structure: Dict[str, Any]) -> Dict[str, Any]:
+    tf5 = dict((context.get("multi_timeframe") or {}).get("5m") or {})
+    tf15 = dict((context.get("multi_timeframe") or {}).get("15m") or {})
+    score = 0.0
+    notes: List[str] = []
+    if max(safe_float(tf5.get("vol_ratio"), 0.0), safe_float(tf15.get("vol_ratio"), 0.0)) >= 1.8:
+        score += 24
+        notes.append("volume expansion")
+    if side == "long":
+        if safe_float(tf5.get("macd_hist"), 0.0) > 0 and safe_float(tf5.get("macd"), 0.0) >= safe_float(tf5.get("macd_signal"), 0.0):
+            score += 18
+        if 55 <= safe_float(tf15.get("rsi"), 50.0) <= 68:
+            score += 16
+        if structure.get("close_above_prior_high"):
+            score += 24
+            notes.append("breakout confirmed")
+    else:
+        if safe_float(tf5.get("macd_hist"), 0.0) < 0 and safe_float(tf5.get("macd"), 0.0) <= safe_float(tf5.get("macd_signal"), 0.0):
+            score += 18
+        if 32 <= safe_float(tf15.get("rsi"), 50.0) <= 45:
+            score += 16
+        if structure.get("close_below_prior_low"):
+            score += 24
+            notes.append("breakdown confirmed")
+    if safe_float(tf15.get("bb_width_pct"), 0.0) <= 3.2 and max(safe_float(tf5.get("vol_ratio"), 0.0), safe_float(tf15.get("vol_ratio"), 0.0)) >= 1.3:
+        score += 18
+        notes.append("squeeze release")
+    return {"score": clamp(score, 0, 100), "notes": notes}
+
+
+def score_positioning_component(side: str, context: Dict[str, Any]) -> Dict[str, Any]:
+    tf15 = dict((context.get("multi_timeframe") or {}).get("15m") or {})
+    basic = dict(context.get("basic_market_data") or {})
+    derivatives = dict(context.get("derivatives_context") or {})
+    liquidity = dict(context.get("liquidity_context") or {})
+    price_change = safe_float(tf15.get("ret_12bars_pct"), 0.0)
+    oi_change = safe_float(derivatives.get("open_interest_change_pct_5m"), 0.0)
+    funding = safe_float(derivatives.get("funding_rate"), 0.0)
+    ratio = safe_float(derivatives.get("long_short_ratio"), 1.0)
+    whale = safe_float(derivatives.get("whale_position_change_pct"), 0.0)
+    cvd_bias = str(liquidity.get("cvd_bias") or "neutral")
+    score = 0.0
+    notes: List[str] = []
+    if side == "long":
+        if price_change > 0 and oi_change >= 0:
+            score += 28
+            notes.append("price + OI rising")
+        if cvd_bias == "buying":
+            score += 18
+        if 0 <= funding <= 0.0008:
+            score += 18
+        elif funding > 0.0015:
+            score -= 12
+        if 0.85 <= ratio <= 1.85:
+            score += 16
+        if whale >= 0:
+            score += min(20, abs(whale) * 0.5)
+    else:
+        if price_change < 0 and oi_change >= 0:
+            score += 28
+            notes.append("price down + OI rising")
+        if cvd_bias == "selling":
+            score += 18
+        if -0.0008 <= funding <= 0.0008:
+            score += 18
+        elif funding > 0.002:
+            score += 10
+        if 0.85 <= ratio <= 1.85:
+            score += 12
+        elif ratio > 2.2:
+            score += 18
+        if whale <= 0:
+            score += min(20, abs(whale) * 0.5)
+    if safe_float(basic.get("open_interest_value_usdt"), 0.0) <= 0:
+        score *= 0.72
+    return {"score": clamp(score, 0, 100), "notes": notes}
+
+
+def score_volatility_efficiency(context: Dict[str, Any]) -> Dict[str, Any]:
+    tf15 = dict((context.get("multi_timeframe") or {}).get("15m") or {})
+    tf1d = dict((context.get("multi_timeframe") or {}).get("1d") or {})
+    liquidity = dict(context.get("liquidity_context") or {})
+    price = safe_float((context.get("basic_market_data") or {}).get("current_price"), 0.0)
+    daily_range_pct = pct_change(safe_float(tf1d.get("recent_structure_high"), price), safe_float(tf1d.get("recent_structure_low"), price))
+    atr_pct = safe_float(tf15.get("atr_pct"), 0.0)
+    spread = safe_float(liquidity.get("spread_pct"), 0.0)
+    depth = safe_float(liquidity.get("bid_depth_10"), 0.0) + safe_float(liquidity.get("ask_depth_10"), 0.0)
+    score = 0.0
+    if atr_pct >= 0.45:
+        score += 34
+    if daily_range_pct >= 4.0:
+        score += 30
+    if 0 < spread <= 0.08:
+        score += 18
+    if depth >= 1500:
+        score += 18
+    return {"score": clamp(score, 0, 100), "notes": ["tradable volatility"] if score >= 45 else []}
+
+
+def score_risk_component(side: str, context: Dict[str, Any], structure: Dict[str, Any]) -> Dict[str, Any]:
+    tf5 = dict((context.get("multi_timeframe") or {}).get("5m") or {})
+    tf15 = dict((context.get("multi_timeframe") or {}).get("15m") or {})
+    liquidity = dict(context.get("liquidity_context") or {})
+    derivatives = dict(context.get("derivatives_context") or {})
+    score = 0.0
+    notes: List[str] = []
+    if max(safe_float(tf5.get("vol_ratio"), 0.0), safe_float(tf15.get("vol_ratio"), 0.0)) < 1.0 and (structure.get("close_above_prior_high") or structure.get("close_below_prior_low")):
+        score += 24
+        notes.append("breakout without follow-through volume")
+    funding = abs(safe_float(derivatives.get("funding_rate"), 0.0))
+    if funding >= 0.002:
+        score += 20
+        notes.append("funding overheated")
+    if side == "long" and structure.get("upper_wick_count", 0) >= 2:
+        score += 18
+    if side == "short" and structure.get("lower_wick_count", 0) >= 2:
+        score += 18
+    if safe_float(liquidity.get("spread_pct"), 0.0) > 0.15:
+        score += 18
+    if safe_float(liquidity.get("bid_depth_10"), 0.0) + safe_float(liquidity.get("ask_depth_10"), 0.0) < 500:
+        score += 16
+    if len(list((context.get("news_context") or {}).get("items") or [])) > 0:
+        score += 8
+    return {"score": clamp(score, 0, 100), "notes": notes}
+
+
+def score_relative_strength(side: str, context: Dict[str, Any], btc_context: Dict[str, Any] | None) -> Dict[str, Any]:
+    tf15 = dict((context.get("multi_timeframe") or {}).get("15m") or {})
+    tf1h = dict((context.get("multi_timeframe") or {}).get("1h") or {})
+    btc15 = dict(((btc_context or {}).get("multi_timeframe") or {}).get("15m") or {})
+    btc1h = dict(((btc_context or {}).get("multi_timeframe") or {}).get("1h") or {})
+    if not btc_context:
+        return {"score": 50.0, "notes": ["BTC benchmark unavailable"]}
+    alt15 = safe_float(tf15.get("ret_12bars_pct"), 0.0)
+    alt1h = safe_float(tf1h.get("ret_12bars_pct"), 0.0)
+    btc15_ret = safe_float(btc15.get("ret_12bars_pct"), 0.0)
+    btc1h_ret = safe_float(btc1h.get("ret_12bars_pct"), 0.0)
+    score = 0.0
+    notes: List[str] = []
+    if side == "long":
+        if abs(btc15_ret) <= 0.8 and alt15 > btc15_ret:
+            score += 34
+        if btc15_ret < 0 and alt15 >= btc15_ret:
+            score += 30
+        if btc15_ret > 0 and alt15 > btc15_ret * 1.2:
+            score += 36
+            notes.append("outperforming BTC")
+    else:
+        if btc15_ret >= 0 and alt15 < btc15_ret - 0.7:
+            score += 34
+        if btc15_ret < 0 and alt15 < btc15_ret:
+            score += 30
+        if btc1h_ret > 0 and alt1h < 0:
+            score += 36
+            notes.append("weak vs BTC")
+    return {"score": clamp(score, 0, 100), "notes": notes}
+
+
+def derive_trade_levels(side: str, context: Dict[str, Any], total_score: float) -> Dict[str, float]:
+    tf15 = dict((context.get("multi_timeframe") or {}).get("15m") or {})
+    price = safe_float((context.get("basic_market_data") or {}).get("current_price"), 0.0)
+    atr = max(safe_float(tf15.get("atr"), 0.0), price * 0.003 if price > 0 else 0.0)
+    support = safe_float(tf15.get("recent_structure_low"), price - atr * 1.6)
+    resistance = safe_float(tf15.get("recent_structure_high"), price + atr * 1.6)
+    rr_target = 2.4 if total_score >= 72 else 2.0 if total_score >= 58 else 1.7
+    if side == "long":
+        entry = price
+        stop = max(min(support, entry - atr * 1.2), entry * 0.7)
+        if stop >= entry:
+            stop = entry - atr * 1.2
+        take_profit = max(resistance, entry + max(entry - stop, atr) * rr_target)
+    else:
+        entry = price
+        stop = min(max(resistance, entry + atr * 1.2), entry * 1.3)
+        if stop <= entry:
+            stop = entry + atr * 1.2
+        take_profit = min(support, entry - max(stop - entry, atr) * rr_target) if support > 0 else entry - max(stop - entry, atr) * rr_target
+    rr_ratio = abs((take_profit - entry) / max(abs(entry - stop), 1e-9))
+    return {
+        "price": round(entry, 6),
+        "stop_loss": round(stop, 6),
+        "take_profit": round(take_profit, 6),
+        "rr_ratio": round(rr_ratio, 2),
+        "atr": round(atr, 6),
+    }
+
+
+def detect_short_reversal_signal(context: Dict[str, Any]) -> Dict[str, Any]:
+    tf5 = dict((context.get("multi_timeframe") or {}).get("5m") or {})
+    tf15 = dict((context.get("multi_timeframe") or {}).get("15m") or {})
+    structure = structure_profile(context, "5m")
+    liquidity = dict(context.get("liquidity_context") or {})
+    triggers: List[str] = []
+    if safe_float(tf5.get("rsi"), 50.0) >= 72 and safe_float(tf15.get("rsi"), 50.0) >= 65:
+        triggers.append("RSI overextended")
+    if safe_float(tf5.get("macd_hist"), 0.0) < 0 or safe_float(tf5.get("macd"), 0.0) < safe_float(tf5.get("macd_signal"), 0.0):
+        triggers.append("5m MACD rolled over")
+    if safe_float(tf5.get("last_close"), 0.0) < safe_float(tf5.get("vwap"), 0.0):
+        triggers.append("lost VWAP")
+    if structure.get("upper_wick_count", 0) >= 2:
+        triggers.append("exhaustion wicks")
+    if str(liquidity.get("cvd_bias") or "") == "selling":
+        triggers.append("sell-side CVD")
+    if safe_float(tf15.get("vol_ratio"), 0.0) >= 1.25:
+        triggers.append("distribution volume")
+    return {"ready": len(triggers) >= 3, "triggers": triggers[:5]}
+
+
+def build_signal_from_context(symbol: str, market: Dict[str, Any], context: Dict[str, Any], btc_context: Dict[str, Any] | None = None, *, candidate_source: str = "general", forced_side: str | None = None) -> Dict[str, Any]:
     tf15 = dict((context.get("multi_timeframe") or {}).get("15m") or {})
     tf1h = dict((context.get("multi_timeframe") or {}).get("1h") or {})
     tf4h = dict((context.get("multi_timeframe") or {}).get("4h") or {})
     tf1d = dict((context.get("multi_timeframe") or {}).get("1d") or {})
+    structure = structure_profile(context, "15m")
+    long_trend = score_trend_component("long", context, structure)
+    short_trend = score_trend_component("short", context, structure)
+    long_momentum = score_momentum_component("long", context, structure)
+    short_momentum = score_momentum_component("short", context, structure)
+    long_positioning = score_positioning_component("long", context)
+    short_positioning = score_positioning_component("short", context)
+    volatility = score_volatility_efficiency(context)
+    long_relative = score_relative_strength("long", context, btc_context)
+    short_relative = score_relative_strength("short", context, btc_context)
+    long_risk = score_risk_component("long", context, structure)
+    short_risk = score_risk_component("short", context, structure)
 
-    long_score = 0.0
-    short_score = 0.0
-    notes: List[str] = []
-
-    if tf15.get("ema20", 0) > tf15.get("ema50", 0):
-        long_score += 12
-        notes.append("15m EMA20 above EMA50")
-    else:
-        short_score += 12
-    if tf1h.get("ema20", 0) > tf1h.get("ema50", 0):
-        long_score += 10
-        notes.append("1h trend aligned long")
-    else:
-        short_score += 10
-    if tf4h.get("ema50", 0) > tf4h.get("ema200", 0):
-        long_score += 8
-    elif tf4h.get("ema50", 0) < tf4h.get("ema200", 0):
-        short_score += 8
-    if safe_float(tf15.get("macd_hist"), 0.0) > 0:
-        long_score += 8
-    else:
-        short_score += 8
-    if safe_float(tf15.get("rsi"), 50.0) >= 55:
-        long_score += 7
-    elif safe_float(tf15.get("rsi"), 50.0) <= 45:
-        short_score += 7
-    if safe_float(tf15.get("adx"), 0.0) >= 18:
-        if safe_float(tf15.get("plus_di"), 0.0) > safe_float(tf15.get("minus_di"), 0.0):
-            long_score += 6
-        else:
-            short_score += 6
-    if safe_float(tf15.get("last_close"), 0.0) > safe_float(tf15.get("vwap"), 0.0):
-        long_score += 4
-    else:
-        short_score += 4
-    if safe_float(tf15.get("vol_ratio"), 0.0) >= 1.15:
-        if safe_float(tf15.get("macd_hist"), 0.0) >= 0:
-            long_score += 4
-        else:
-            short_score += 4
-
-    score = round(long_score - short_score, 2)
-    price = safe_float((context.get("basic_market_data") or {}).get("current_price"), 0.0)
-    atr = max(safe_float(tf15.get("atr"), 0.0), price * 0.002 if price > 0 else 0.0)
-    side = "long" if score >= 0 else "short"
-    confidence = clamp((abs(score) / 55.0) * 100.0, 18.0, 96.0)
-    entry_quality = clamp((abs(score) / 8.0), 1.0, 10.0)
-    rr_ratio = 2.2 if abs(score) >= 18 else 1.8
-    if side == "long":
-        stop_loss = max(safe_float(tf15.get("recent_structure_low"), price - atr * 1.8), price - atr * 1.8)
-        take_profit = max(price + atr * rr_ratio, safe_float(tf15.get("recent_structure_high"), 0.0))
-    else:
-        stop_loss = min(max(price + atr * 1.8, price * 1.002), max(safe_float(tf15.get("recent_structure_high"), price + atr * 1.8), price + atr * 1.8))
-        take_profit = min(price - atr * rr_ratio, safe_float(tf15.get("recent_structure_low"), price - atr * rr_ratio))
+    long_total = (
+        long_trend["score"] * 0.30
+        + long_momentum["score"] * 0.25
+        + long_positioning["score"] * 0.20
+        + volatility["score"] * 0.10
+        + long_relative["score"] * 0.10
+        - long_risk["score"] * 0.15
+    )
+    short_total = (
+        short_trend["score"] * 0.30
+        + short_momentum["score"] * 0.25
+        + short_positioning["score"] * 0.20
+        + volatility["score"] * 0.10
+        + short_relative["score"] * 0.10
+        - short_risk["score"] * 0.15
+    )
+    side = forced_side or ("long" if long_total >= short_total else "short")
+    total_score = max(long_total, short_total) if forced_side is None else (long_total if forced_side == "long" else short_total)
+    trend = long_trend if side == "long" else short_trend
+    momentum = long_momentum if side == "long" else short_momentum
+    positioning = long_positioning if side == "long" else short_positioning
+    relative = long_relative if side == "long" else short_relative
+    risk = long_risk if side == "long" else short_risk
+    levels = derive_trade_levels(side, context, total_score)
+    confidence = clamp(total_score, 12.0, 98.0)
+    entry_quality = clamp((trend["score"] * 0.35 + momentum["score"] * 0.35 + volatility["score"] * 0.15 + relative["score"] * 0.15) / 10.0, 1.0, 10.0)
     market_dir = "bullish" if tf1d.get("trend_label") == "uptrend" else "bearish" if tf1d.get("trend_label") == "downtrend" else "neutral"
     breakdown = {
-        "Setup": infer_setup(tf15, tf1h, tf4h),
+        "Setup": infer_setup(tf15, tf1h, tf4h, side, structure, risk["score"]),
         "Regime": market_dir,
-        "RegimeConfidence": round(clamp((abs(score) / 40.0) * 100.0, 20.0, 92.0), 1),
-        "RegimeDir": market_dir,
+        "TrendStrength": round(trend["score"], 2),
+        "MomentumBurst": round(momentum["score"], 2),
+        "Positioning": round(positioning["score"], 2),
+        "VolatilityEfficiency": round(volatility["score"], 2),
+        "RelativeStrength": round(relative["score"], 2),
+        "RiskDeduction": round(risk["score"], 2),
+        "RegimeConfidence": round(confidence, 1),
         "TrendConfidence": round(confidence, 1),
         "SignalQuality": round(entry_quality, 1),
-        "RR": round(rr_ratio, 2),
-        "VWAPDistanceATR": round((price - safe_float(tf15.get("vwap"), price)) / max(atr, 1e-9), 4),
-        "EMA20DistanceATR": round((price - safe_float(tf15.get("ema20"), price)) / max(atr, 1e-9), 4),
-        "SRDistanceATR": round(min(abs(price - safe_float(tf15.get("recent_structure_high"), price)), abs(price - safe_float(tf15.get("recent_structure_low"), price))) / max(atr, 1e-9), 4),
+        "RR": round(levels["rr_ratio"], 2),
+        "VWAPDistanceATR": round((levels["price"] - safe_float(tf15.get("vwap"), levels["price"])) / max(levels["atr"], 1e-9), 4),
+        "EMA20DistanceATR": round((levels["price"] - safe_float(tf15.get("ema20"), levels["price"])) / max(levels["atr"], 1e-9), 4),
+        "SRDistanceATR": round(min(abs(levels["price"] - safe_float(tf15.get("recent_structure_high"), levels["price"])), abs(levels["price"] - safe_float(tf15.get("recent_structure_low"), levels["price"]))) / max(levels["atr"], 1e-9), 4),
     }
+    notes = trend["notes"] + momentum["notes"] + positioning["notes"] + relative["notes"] + risk["notes"]
+    signed_score = round(total_score if side == "long" else -total_score, 2)
     return {
         "symbol": symbol,
-        "direction": "long" if side == "long" else "short",
+        "direction": side,
         "side": side,
-        "score": score,
-        "raw_score": score,
-        "priority_score": abs(score),
+        "score": signed_score,
+        "raw_score": signed_score,
+        "priority_score": round(total_score, 2),
         "direction_confidence": round(confidence, 1),
         "trend_confidence": round(confidence, 1),
         "entry_quality": round(entry_quality, 1),
-        "signal_grade": "A" if abs(score) >= 24 else "B" if abs(score) >= 14 else "C",
+        "signal_grade": "A" if total_score >= 72 else "B" if total_score >= 58 else "C",
         "setup_label": breakdown["Setup"],
-        "price": round(price, 6),
-        "stop_loss": round(stop_loss, 6),
-        "take_profit": round(take_profit, 6),
-        "rr_ratio": round(abs((take_profit - price) / max(abs(price - stop_loss), 1e-9)), 2),
-        "margin_pct": round(clamp(0.03 + (abs(score) / 900.0), 0.03, 0.08), 4),
-        "est_pnl": round(((take_profit - price) / max(price, 1e-9)) * 100 if side == "long" else ((price - take_profit) / max(price, 1e-9)) * 100, 2),
+        "price": levels["price"],
+        "stop_loss": levels["stop_loss"],
+        "take_profit": levels["take_profit"],
+        "rr_ratio": levels["rr_ratio"],
+        "margin_pct": round(clamp((FIXED_ORDER_NOTIONAL_USDT / max(_get_symbol_max_leverage(symbol), 1)) / max(safe_float(STATE.get("equity"), 100.0), 100.0), 0.01, 0.25), 4),
+        "est_pnl": round(((levels["take_profit"] - levels["price"]) / max(levels["price"], 1e-9)) * 100 if side == "long" else ((levels["price"] - levels["take_profit"]) / max(levels["price"], 1e-9)) * 100, 2),
         "breakdown": breakdown,
-        "desc": " | ".join(notes[:4]) or "Live scan signal",
+        "desc": " | ".join(notes[:5]) or "Live scan signal",
         "trend_mode": "learning",
         "hold_reason": "normal_manage",
-        "trend_note": "Local AI learning removed. Signal uses live market structure, indicators, liquidity, and derivative context.",
+        "trend_note": "Local AI learning removed. Ranking uses trend, momentum, positioning, volatility, BTC relative strength, and risk deduction.",
+        "candidate_source": candidate_source,
+        "scanner_intent": "short_reversal_review" if candidate_source == "short_gainers" else "general_rank_review",
+        "atr": levels["atr"],
+        "atr15": levels["atr"],
         "openai_market_context": context,
         "market": market,
+    }
+
+
+def build_pressure_snapshot(tf_stats: Dict[str, Any], context: Dict[str, Any], timeframe: str) -> Dict[str, Any]:
+    price = safe_float((context.get("basic_market_data") or {}).get("current_price"), safe_float(tf_stats.get("last_close"), 0.0))
+    atr = max(safe_float(tf_stats.get("atr"), 0.0), price * 0.002 if price > 0 else 0.0)
+    structure = structure_profile({"timeframe_bars": {timeframe: list((context.get("timeframe_bars") or {}).get(timeframe) or [])}}, timeframe)
+    close_price = safe_float(tf_stats.get("last_close"), price)
+    trend_stack = "bullish" if close_price >= safe_float(tf_stats.get("ema20"), close_price) >= safe_float(tf_stats.get("ema50"), close_price) else "bearish" if close_price <= safe_float(tf_stats.get("ema20"), close_price) <= safe_float(tf_stats.get("ema50"), close_price) else "mixed"
+    swing_bias = "bullish" if structure.get("hh_count", 0) >= 3 and structure.get("hl_count", 0) >= 3 else "bearish" if structure.get("lh_count", 0) >= 3 and structure.get("ll_count", 0) >= 3 else "mixed"
+    pressure_price = safe_float(tf_stats.get("recent_structure_high"), close_price)
+    support_price = safe_float(tf_stats.get("recent_structure_low"), close_price)
+    return {
+        "structure_bias": swing_bias,
+        "trend_stack": trend_stack,
+        "swing_bias": swing_bias,
+        "recent_break": "breakout" if structure.get("close_above_prior_high") else "breakdown" if structure.get("close_below_prior_low") else "inside",
+        "pressure_price": pressure_price,
+        "support_price": support_price,
+        "pressure_distance_pct": round(max((pressure_price - close_price) / max(close_price, 1e-9) * 100.0, 0.0), 4),
+        "support_distance_pct": round(max((close_price - support_price) / max(close_price, 1e-9) * 100.0, 0.0), 4),
+        "pressure_distance_atr": round(max((pressure_price - close_price) / max(atr, 1e-9), 0.0), 4),
+        "support_distance_atr": round(max((close_price - support_price) / max(atr, 1e-9), 0.0), 4),
+        "close_vs_ema20_pct": round(pct_change(close_price, safe_float(tf_stats.get("ema20"), close_price)), 4),
+        "close_vs_ema50_pct": round(pct_change(close_price, safe_float(tf_stats.get("ema50"), close_price)), 4),
+        "volume_ratio": round(safe_float(tf_stats.get("vol_ratio"), 0.0), 4),
+        "hh_count": structure.get("hh_count", 0),
+        "hl_count": structure.get("hl_count", 0),
+        "lh_count": structure.get("lh_count", 0),
+        "ll_count": structure.get("ll_count", 0),
     }
 
 
 def build_market_context(symbol: str, ticker: Dict[str, Any], market: Dict[str, Any]) -> Dict[str, Any]:
     multi_timeframe: Dict[str, Any] = {}
     timeframe_bars: Dict[str, Any] = {}
+    pressure_map: Dict[str, Any] = {}
     errors: List[str] = []
     for tf in TIMEFRAMES:
         try:
@@ -810,6 +1204,16 @@ def build_market_context(symbol: str, ticker: Dict[str, Any], market: Dict[str, 
         "stacked_blocking_within_1atr": len([tf for tf in opposing if tf in ("15m", "1h")]),
         "stacked_blocking_within_2atr": len(opposing),
     }
+    for tf, stats in multi_timeframe.items():
+        pressure_map[tf] = build_pressure_snapshot(stats, {"basic_market_data": basic_market, "timeframe_bars": timeframe_bars}, tf)
+    reference_trade_plan = {
+        "machine_entry_hint": basic_market["current_price"],
+        "machine_stop_loss_hint": tf15.get("recent_structure_low", 0.0) if bias != "short" else tf15.get("recent_structure_high", 0.0),
+        "machine_take_profit_hint": tf15.get("recent_structure_high", 0.0) if bias != "short" else tf15.get("recent_structure_low", 0.0),
+        "machine_rr_hint": 2.0,
+        "machine_est_pnl_pct_hint": abs(safe_float(tf15.get("ret_12bars_pct"), 0.0)),
+        "note": "Hints are generated from live structure and used only as low-trust machine anchors.",
+    }
     return {
         "style": {"holding_period": "intraday", "trade_goal": "Use live scan plus OpenAI.", "decision_priority": "market_context>multi_timeframe>liquidity>derivatives>OpenAI"},
         "signal_context": {"side": bias, "current_price": basic_market["current_price"], "atr_15m": tf15.get("atr", 0.0), "atr_4h": tf4h.get("atr", 0.0)},
@@ -825,20 +1229,33 @@ def build_market_context(symbol: str, ticker: Dict[str, Any], market: Dict[str, 
         "timeframe_bars": timeframe_bars,
         "pre_breakout_radar": {"ready": len(aligned) >= 2, "phase": "watch", "direction": bias, "score": round(safe_float(tf15.get("adx"), 0.0), 2), "summary": "Multi-timeframe scan without local AI learning.", "note": "Uses live candles, derivatives, and liquidity only."},
         "execution_context": {"spread_pct": liquidity.get("spread_pct", 0.0), "top_depth_ratio": liquidity.get("depth_imbalance_10", 0.0), "api_error_streak": len(errors) + len(liquidity.get("errors", [])) + len(derivatives.get("errors", [])), "status": "ok" if not errors else "degraded", "notes": errors + list(liquidity.get("errors", [])) + list(derivatives.get("errors", []))},
+        "execution_policy": {
+            "fixed_leverage": 0,
+            "leverage_mode": "cross_max",
+            "min_order_margin_usdt": round(FIXED_ORDER_NOTIONAL_USDT / max(_get_symbol_max_leverage(symbol), 1), 4),
+            "fixed_order_notional_usdt": FIXED_ORDER_NOTIONAL_USDT,
+            "margin_pct_range": [0.01, 0.20],
+        },
         "multi_timeframe_pressure_summary": pressure_summary,
-        "multi_timeframe_pressure": {},
+        "multi_timeframe_pressure": pressure_map,
+        "reference_trade_plan": reference_trade_plan,
         "reference_context": {"summary": "Live scan built from Bitget market, multi-timeframe candles, liquidity, and derivative data. Local AI and replay modules are disabled."},
     }
 
 
 def flatten_openai_result(result: Dict[str, Any]) -> Dict[str, Any]:
     decision = dict(result.get("decision") or {})
+    action = review_action(decision) if decision else ""
     return {
         "ai_enabled": True,
         "openai_enabled": True,
         "openai_status": str(result.get("status") or ""),
         "openai_status_label": str(result.get("status") or "").replace("_", " "),
+        "openai_action": action,
         "openai_model": str(result.get("model") or ""),
+        "openai_breakout_assessment": str(decision.get("breakout_assessment") or ""),
+        "openai_trade_side": str(decision.get("trade_side") or ""),
+        "openai_rr_ratio": safe_float(decision.get("rr_ratio"), 0.0),
         "openai_order_type": decision.get("order_type", ""),
         "openai_margin_pct": safe_float(decision.get("margin_pct"), 0.0),
         "openai_leverage": safe_float(decision.get("leverage"), 0.0),
@@ -895,6 +1312,8 @@ def build_portfolio_snapshot() -> Dict[str, Any]:
         "active_position_count": len(active),
         "long_count": long_count,
         "short_count": short_count,
+        "same_direction_count": max(long_count, short_count),
+        "open_symbols": [row.get("symbol") for row in active if row.get("symbol")],
         "position_symbols": [row.get("symbol") for row in active if row.get("symbol")],
     }
 
@@ -985,27 +1404,541 @@ def refresh_learning_summary() -> None:
     )
 
 
-def maybe_run_openai(top_signals: List[Dict[str, Any]]) -> None:
+def diversified_selection(signals: List[Dict[str, Any]], limit: int) -> List[Dict[str, Any]]:
+    ranked = sorted(signals, key=lambda row: safe_float(row.get("priority_score"), 0.0), reverse=True)
+    selected: List[Dict[str, Any]] = []
+    used_assets = set()
+    used_setups = set()
+    for row in ranked:
+        if len(selected) >= limit:
+            break
+        asset = base_asset(row.get("symbol", ""))
+        setup = "{}|{}|{}".format(row.get("candidate_source"), row.get("side"), row.get("setup_label"))
+        same_side_count = sum(1 for item in selected if item.get("side") == row.get("side"))
+        if asset in used_assets:
+            continue
+        if setup in used_setups and len(ranked) > limit:
+            continue
+        if same_side_count >= 3:
+            continue
+        selected.append(dict(row))
+        used_assets.add(asset)
+        used_setups.add(setup)
+    if len(selected) < limit:
+        existing = {row.get("symbol") for row in selected}
+        for row in ranked:
+            if len(selected) >= limit:
+                break
+            if row.get("symbol") in existing:
+                continue
+            selected.append(dict(row))
+            existing.add(row.get("symbol"))
+    return selected[:limit]
+
+
+def build_scan_error_signal(symbol: str, ticker: Dict[str, Any], error: Exception, candidate_source: str = "general") -> Dict[str, Any]:
+    return {
+        "symbol": symbol,
+        "direction": "neutral",
+        "side": "long",
+        "score": 0.0,
+        "raw_score": 0.0,
+        "priority_score": 0.0,
+        "direction_confidence": 0.0,
+        "trend_confidence": 0.0,
+        "entry_quality": 0.0,
+        "signal_grade": "C",
+        "setup_label": "scan_error",
+        "price": safe_float(ticker.get("last"), 0.0),
+        "stop_loss": 0.0,
+        "take_profit": 0.0,
+        "rr_ratio": 0.0,
+        "margin_pct": 0.03,
+        "est_pnl": 0.0,
+        "breakdown": {"Setup": "scan_error"},
+        "desc": "Scan failed: {}".format(str(error)[:120]),
+        "trend_mode": "learning",
+        "hold_reason": "normal_manage",
+        "trend_note": "Scan failed, payload degraded.",
+        "candidate_source": candidate_source,
+        "scanner_intent": "scan_error",
+        "openai_market_context": {},
+        "market": {"symbol": symbol},
+    }
+
+
+def build_openai_constraints() -> Dict[str, Any]:
+    return {
+        "fixed_leverage": int(OPENAI_TRADE_CONFIG.get("max_leverage", 25) or 25),
+        "min_leverage": int(OPENAI_TRADE_CONFIG.get("min_leverage", 4) or 4),
+        "max_leverage": int(OPENAI_TRADE_CONFIG.get("max_leverage", 25) or 25),
+        "min_margin_pct": 0.01,
+        "max_margin_pct": 0.20,
+        "fixed_order_notional_usdt": FIXED_ORDER_NOTIONAL_USDT,
+        "min_order_margin_usdt": round(FIXED_ORDER_NOTIONAL_USDT / max(int(OPENAI_TRADE_CONFIG.get("max_leverage", 25) or 25), 1), 4),
+        "trade_style": "short_term_intraday",
+        "max_open_positions": MAX_OPEN_POSITIONS,
+        "max_same_direction": 3,
+        "leverage_policy": "always_use_symbol_max",
+    }
+
+
+def open_position_symbols() -> set[str]:
+    with STATE_LOCK:
+        return {str(row.get("symbol") or "") for row in list(STATE.get("active_positions") or []) if row.get("symbol")}
+
+
+def pending_order_symbols() -> set[str]:
+    with STATE_LOCK:
+        return set((STATE.get("fvg_orders") or {}).keys())
+
+
+def review_action(decision: Dict[str, Any]) -> str:
+    decision = dict(decision or {})
+    if bool(decision.get("should_trade", False)):
+        return "enter"
+    if str(decision.get("watch_trigger_type") or "none").lower() != "none":
+        return "observe"
+    return "skip"
+
+
+def update_watchlist_state() -> None:
+    watchlist = []
+    with REVIEW_LOCK:
+        for symbol, row in REVIEW_TRACKER.items():
+            if str(row.get("status") or "") != "observe":
+                continue
+            watchlist.append(
+                {
+                    "symbol": symbol,
+                    "status": "observe",
+                    "side": row.get("side"),
+                    "watch_trigger_type": row.get("watch_trigger_type"),
+                    "watch_trigger_price": row.get("watch_trigger_price"),
+                    "watch_invalidation_price": row.get("watch_invalidation_price"),
+                    "recheck_reason": row.get("recheck_reason"),
+                    "candidate_source": row.get("candidate_source"),
+                    "updated_at": row.get("updated_at"),
+                }
+            )
+    update_state(watchlist=watchlist[:20])
+
+
+def watch_condition_met(signal: Dict[str, Any], tracker: Dict[str, Any]) -> bool:
+    decision = dict(tracker or {})
+    if not decision:
+        return False
+    trigger_type = str(decision.get("watch_trigger_type") or "none").lower()
+    if trigger_type in ("none", "manual_review"):
+        return False
+    price = safe_float(signal.get("price"), 0.0)
+    trigger = safe_float(decision.get("watch_trigger_price"), 0.0)
+    invalidation = safe_float(decision.get("watch_invalidation_price"), 0.0)
+    side = str(decision.get("side") or signal.get("side") or "long").lower()
+    liquidity = dict((signal.get("openai_market_context") or {}).get("liquidity_context") or {})
+    vol_ok = max(safe_float(liquidity.get("volume_anomaly_5m"), 0.0), safe_float(liquidity.get("volume_anomaly_15m"), 0.0)) >= 1.05
+    if side == "long":
+        if invalidation > 0 and price < invalidation:
+            return False
+        if trigger_type == "pullback_to_entry":
+            return trigger > 0 and price <= trigger * 1.004
+        if trigger_type == "breakout_reclaim":
+            return trigger > 0 and price >= trigger
+        if trigger_type == "volume_confirmation":
+            return vol_ok and trigger > 0 and price >= trigger
+    else:
+        if invalidation > 0 and price > invalidation:
+            return False
+        if trigger_type == "pullback_to_entry":
+            return trigger > 0 and price >= trigger * 0.996
+        if trigger_type == "breakdown_confirm":
+            return trigger > 0 and price <= trigger
+        if trigger_type == "volume_confirmation":
+            return vol_ok and trigger > 0 and price <= trigger
+        if trigger_type == "breakout_reclaim":
+            return trigger > 0 and price <= trigger
+    return False
+
+
+def candidate_review_gate(signal: Dict[str, Any]) -> Dict[str, Any]:
+    symbol = str(signal.get("symbol") or "")
+    if not symbol:
+        return {"ok": False, "reason": "missing_symbol", "force_recheck": False}
+    if symbol in open_position_symbols() or symbol in pending_order_symbols():
+        return {"ok": False, "reason": "already_active", "force_recheck": False}
+    with REVIEW_LOCK:
+        tracker = dict(REVIEW_TRACKER.get(symbol) or {})
+    if not tracker:
+        return {"ok": True, "reason": "fresh", "force_recheck": False}
+    status = str(tracker.get("status") or "")
+    now = now_ts()
+    if status == "skip" and now < safe_float(tracker.get("next_allowed_ts"), 0.0):
+        return {"ok": False, "reason": "skip_cooldown", "force_recheck": False}
+    if status == "observe":
+        ready = watch_condition_met(signal, tracker)
+        return {"ok": ready, "reason": "watch_triggered" if ready else "watch_waiting", "force_recheck": ready}
+    return {"ok": True, "reason": "reopen", "force_recheck": False}
+
+
+def apply_review_tracker(signal: Dict[str, Any], result: Dict[str, Any]) -> str:
+    decision = dict(result.get("decision") or {})
+    if not decision:
+        return "none"
+    action = review_action(decision)
+    symbol = str(signal.get("symbol") or "")
+    with REVIEW_LOCK:
+        row = {
+            "status": action,
+            "side": signal.get("side"),
+            "candidate_source": signal.get("candidate_source"),
+            "updated_at": tw_now_str(),
+            "watch_trigger_type": str(decision.get("watch_trigger_type") or "none"),
+            "watch_trigger_price": safe_float(decision.get("watch_trigger_price"), 0.0),
+            "watch_invalidation_price": safe_float(decision.get("watch_invalidation_price"), 0.0),
+            "recheck_reason": str(decision.get("recheck_reason") or ""),
+            "decision": decision,
+            "next_allowed_ts": 0.0,
+        }
+        if action == "skip":
+            row["next_allowed_ts"] = now_ts() + AI_SKIP_COOLDOWN_SEC
+        REVIEW_TRACKER[symbol] = row
+    update_watchlist_state()
+    persist_runtime_snapshot()
+    return action
+
+
+def _apply_openai_trade_plan_to_signal(sig: Dict[str, Any], decision: Dict[str, Any], result: Dict[str, Any]) -> Dict[str, Any]:
+    plan = dict(decision or {})
+    if not plan:
+        return sig
+    sig["openai_trade_plan"] = plan
+    sig["openai_trade_meta"] = {
+        "model": str((result or {}).get("model") or ""),
+        "status": str((result or {}).get("status") or ""),
+        "payload_hash": str((result or {}).get("payload_hash") or ""),
+    }
+    sig["decision_source"] = "openai"
+    sig["planned_entry_price"] = float(plan.get("entry_price", sig.get("price", 0)) or sig.get("price", 0))
+    sig["stop_loss"] = float(plan.get("stop_loss", sig.get("stop_loss", 0)) or sig.get("stop_loss", 0))
+    sig["take_profit"] = float(plan.get("take_profit", sig.get("take_profit", 0)) or sig.get("take_profit", 0))
+    if str(plan.get("order_type") or "").lower() != "limit" and sig["planned_entry_price"] > 0:
+        sig["price"] = sig["planned_entry_price"]
+    return sig
+
+
+def _get_symbol_max_leverage(symbol: str) -> int:
+    lev = 0
+    try:
+        market = exchange.market(symbol)
+        info = dict(market.get("info") or {})
+        for field in ("maxLeverage", "maxLev", "leverageMax"):
+            value = info.get(field)
+            if value in (None, ""):
+                continue
+            lev = max(lev, int(float(value)))
+        lev = max(lev, int(float((market.get("limits") or {}).get("leverage", {}).get("max", 0) or 0)))
+    except Exception:
+        lev = 0
+    if lev <= 1:
+        lev = max(1, int(OPENAI_TRADE_CONFIG.get("max_leverage", 25) or 25))
+    return lev
+
+
+def _force_set_symbol_max_leverage(symbol: str, side: str) -> tuple[int, Dict[str, Any], str, bool]:
+    pos_side = "long" if str(side or "").lower() in ("buy", "long") else "short"
+    lev = _get_symbol_max_leverage(symbol)
+    attempts = [
+        {},
+        {"tdMode": "cross", "holdSide": pos_side},
+        {"marginMode": "cross", "holdSide": pos_side},
+        {"tdMode": "cross", "posSide": pos_side},
+        {"marginMode": "cross", "posSide": pos_side},
+    ]
+    errors: List[str] = []
+    try:
+        if hasattr(exchange, "set_margin_mode"):
+            for params in attempts:
+                try:
+                    exchange.set_margin_mode("cross", symbol, params or None)
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    for params in attempts:
+        try:
+            if params:
+                exchange.set_leverage(lev, symbol, params)
+            else:
+                exchange.set_leverage(lev, symbol)
+            return lev, params, "", True
+        except Exception as exc:
+            errors.append(str(exc)[:180])
+    return lev, {}, " | ".join(errors[:3]), False
+
+
+def compute_order_size(symbol: str, entry_price: float, leverage: float) -> Dict[str, float]:
+    entry_price = max(safe_float(entry_price, 0.0), 1e-9)
+    leverage = max(safe_float(leverage, 1.0), 1.0)
+    raw_qty = FIXED_ORDER_NOTIONAL_USDT / entry_price
+    try:
+        market = exchange.market(symbol)
+        min_amt = safe_float(((market.get("limits") or {}).get("amount") or {}).get("min"), 0.0)
+        if min_amt > 0:
+            raw_qty = max(raw_qty, min_amt)
+    except Exception:
+        pass
+    qty = safe_float(exchange.amount_to_precision(symbol, raw_qty), raw_qty)
+    return {
+        "qty": qty,
+        "order_usdt": round(qty * entry_price, 4),
+        "margin_usdt": round((qty * entry_price) / leverage, 4),
+    }
+
+
+def ensure_exchange_protection(symbol: str, side: str, qty: float, stop_loss: float, take_profit: float) -> Dict[str, bool]:
+    close_side = "sell" if str(side).lower() == "buy" else "buy"
+    pos_side = "long" if str(side).lower() == "buy" else "short"
+    outcome = {"sl_ok": False, "tp_ok": False}
+    sl_attempts = [
+        {"reduceOnly": True, "stopPrice": str(stop_loss), "orderType": "stop", "posSide": pos_side, "tdMode": "cross"},
+        {"reduceOnly": True, "stopLossPrice": str(stop_loss), "posSide": pos_side, "tdMode": "cross"},
+        {"reduceOnly": True, "triggerPrice": str(stop_loss), "triggerType": "mark_price", "posSide": pos_side, "tdMode": "cross"},
+    ]
+    tp_attempts = [
+        {"reduceOnly": True, "stopPrice": str(take_profit), "orderType": "takeProfit", "posSide": pos_side, "tdMode": "cross"},
+        {"reduceOnly": True, "takeProfitPrice": str(take_profit), "triggerPrice": str(take_profit), "posSide": pos_side, "tdMode": "cross"},
+        {"reduceOnly": True, "triggerPrice": str(take_profit), "triggerType": "mark_price", "orderType": "takeProfit", "posSide": pos_side, "tdMode": "cross"},
+    ]
+    for params in sl_attempts:
+        try:
+            exchange.create_order(symbol, "market", close_side, qty, None, params)
+            outcome["sl_ok"] = True
+            break
+        except Exception:
+            continue
+    for params in tp_attempts:
+        try:
+            exchange.create_order(symbol, "market", close_side, qty, None, params)
+            outcome["tp_ok"] = True
+            break
+        except Exception:
+            continue
+    with STATE_LOCK:
+        protection_state = dict(STATE.get("protection_state") or {})
+        protection_state[symbol] = {
+            "sl_ok": outcome["sl_ok"],
+            "tp_ok": outcome["tp_ok"],
+            "sl": round(stop_loss, 8),
+            "tp": round(take_profit, 8),
+            "updated_at": tw_now_str(),
+        }
+        STATE["protection_state"] = protection_state
+    return outcome
+
+
+def record_open_trade(signal: Dict[str, Any], qty: float, leverage: float, order_usdt: float, decision: Dict[str, Any]) -> None:
+    append_trade_history(
+        {
+            "time": tw_now_str(),
+            "symbol": signal.get("symbol"),
+            "side": signal.get("side"),
+            "price": safe_float(signal.get("price"), 0.0),
+            "score": safe_float(signal.get("score"), 0.0),
+            "stop_loss": safe_float(signal.get("stop_loss"), 0.0),
+            "take_profit": safe_float(signal.get("take_profit"), 0.0),
+            "pnl_pct": None,
+            "contracts": round(qty, 8),
+            "order_usdt": round(order_usdt, 4),
+            "leverage": leverage,
+            "decision_source": "openai",
+            "openai_order_type": str(decision.get("order_type") or ""),
+            "openai_action": review_action(decision),
+        }
+    )
+
+
+def clear_pending_order(symbol: str) -> None:
+    with STATE_LOCK:
+        pending = dict(STATE.get("fvg_orders") or {})
+        if symbol in pending:
+            del pending[symbol]
+            STATE["fvg_orders"] = pending
+
+
+def register_pending_order(symbol: str, order: Dict[str, Any], signal: Dict[str, Any], leverage: int, size_info: Dict[str, float]) -> None:
+    with STATE_LOCK:
+        pending = dict(STATE.get("fvg_orders") or {})
+        pending[symbol] = {
+            "symbol": symbol,
+            "order_id": str(order.get("id") or ""),
+            "price": safe_float(signal.get("planned_entry_price", signal.get("price")), 0.0),
+            "stop_loss": safe_float(signal.get("stop_loss"), 0.0),
+            "take_profit": safe_float(signal.get("take_profit"), 0.0),
+            "side": signal.get("side"),
+            "leverage": leverage,
+            "qty": size_info.get("qty", 0.0),
+            "order_usdt": size_info.get("order_usdt", 0.0),
+            "decision": dict(signal.get("openai_trade_plan") or {}),
+            "updated_at": tw_now_str(),
+        }
+        STATE["fvg_orders"] = pending
+
+
+def place_order_from_signal(signal: Dict[str, Any]) -> Dict[str, Any]:
+    symbol = str(signal.get("symbol") or "")
+    decision = dict(signal.get("openai_trade_plan") or {})
+    if not symbol or not decision:
+        return {"ok": False, "error": "missing_plan"}
+    with ORDER_LOCK:
+        if len(open_position_symbols()) >= MAX_OPEN_POSITIONS:
+            return {"ok": False, "error": "max_positions"}
+        if symbol in open_position_symbols() or symbol in pending_order_symbols():
+            return {"ok": False, "error": "already_active"}
+        order_side = "buy" if str(signal.get("side") or "").lower() == "long" else "sell"
+        leverage, _, lev_error, lev_ok = _force_set_symbol_max_leverage(symbol, order_side)
+        if not lev_ok:
+            return {"ok": False, "error": lev_error or "leverage_failed"}
+        planned_entry = safe_float(decision.get("entry_price"), safe_float(signal.get("price"), 0.0))
+        signal["planned_entry_price"] = planned_entry
+        signal["price"] = planned_entry if planned_entry > 0 else safe_float(signal.get("price"), 0.0)
+        signal["stop_loss"] = safe_float(decision.get("stop_loss"), safe_float(signal.get("stop_loss"), 0.0))
+        signal["take_profit"] = safe_float(decision.get("take_profit"), safe_float(signal.get("take_profit"), 0.0))
+        size_info = compute_order_size(symbol, signal["price"], leverage)
+        qty = safe_float(size_info.get("qty"), 0.0)
+        if qty <= 0:
+            return {"ok": False, "error": "qty_zero"}
+        pos_side = "long" if order_side == "buy" else "short"
+        params = {"tdMode": "cross", "marginMode": "cross", "posSide": pos_side}
+        order_type = "limit" if str(decision.get("order_type") or "").lower() == "limit" else "market"
+        try:
+            if order_type == "limit":
+                order = exchange.create_order(symbol, "limit", order_side, qty, signal["price"], params)
+                register_pending_order(symbol, order, signal, leverage, size_info)
+                return {"ok": True, "pending": True, "order_id": order.get("id")}
+            order = exchange.create_order(symbol, "market", order_side, qty, None, params)
+            ensure_exchange_protection(symbol, order_side, qty, signal["stop_loss"], signal["take_profit"])
+            record_open_trade(signal, qty, leverage, size_info.get("order_usdt", 0.0), decision)
+            return {"ok": True, "pending": False, "order_id": order.get("id")}
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)[:220]}
+
+
+def manage_pending_limit_orders() -> None:
+    with STATE_LOCK:
+        pending = dict(STATE.get("fvg_orders") or {})
+    for symbol, row in pending.items():
+        order_id = str(row.get("order_id") or "")
+        if not order_id:
+            clear_pending_order(symbol)
+            continue
+        try:
+            order = exchange.fetch_order(order_id, symbol)
+        except Exception:
+            order = {}
+        status = str(order.get("status") or "").lower()
+        if status in ("closed", "filled"):
+            ensure_exchange_protection(
+                symbol,
+                "buy" if str(row.get("side") or "").lower() == "long" else "sell",
+                safe_float(row.get("qty"), 0.0),
+                safe_float(row.get("stop_loss"), 0.0),
+                safe_float(row.get("take_profit"), 0.0),
+            )
+            append_trade_history(
+                {
+                    "time": tw_now_str(),
+                    "symbol": symbol,
+                    "side": row.get("side"),
+                    "price": safe_float(row.get("price"), 0.0),
+                    "score": 0.0,
+                    "stop_loss": safe_float(row.get("stop_loss"), 0.0),
+                    "take_profit": safe_float(row.get("take_profit"), 0.0),
+                    "pnl_pct": None,
+                    "order_usdt": safe_float(row.get("order_usdt"), 0.0),
+                    "decision_source": "openai_limit_fill",
+                }
+            )
+            clear_pending_order(symbol)
+            continue
+        decision = dict(row.get("decision") or {})
+        cancel_price = safe_float(decision.get("limit_cancel_price"), 0.0)
+        current_price = 0.0
+        try:
+            current_price = safe_float((exchange.fetch_ticker(symbol) or {}).get("last"), 0.0)
+        except Exception:
+            current_price = safe_float(row.get("price"), 0.0)
+        side = str(row.get("side") or "").lower()
+        should_cancel = False
+        if cancel_price > 0:
+            if side == "long" and current_price < cancel_price:
+                should_cancel = True
+            if side == "short" and current_price > cancel_price:
+                should_cancel = True
+        if should_cancel:
+            try:
+                exchange.cancel_order(order_id, symbol)
+            except Exception:
+                pass
+            clear_pending_order(symbol)
+
+
+def build_scan_universe(markets: Dict[str, Any], tickers: Dict[str, Any]) -> tuple[List[tuple[str, Dict[str, Any], Dict[str, Any]]], List[tuple[str, Dict[str, Any], Dict[str, Any]]], List[tuple[str, Dict[str, Any], Dict[str, Any]]]]:
+    tradeable = []
+    for symbol, market in markets.items():
+        if not isinstance(market, dict):
+            continue
+        if not is_usdt_symbol(market) or not bool(market.get("active", True)) or market_type_label(market) == "spot":
+            continue
+        ticker = dict(tickers.get(symbol) or {})
+        if safe_float(ticker.get("quoteVolume"), 0.0) < MIN_SYMBOL_QUOTE_VOLUME:
+            continue
+        tradeable.append((symbol, market, ticker))
+    by_volume = sorted(tradeable, key=lambda row: safe_float(row[2].get("quoteVolume"), 0.0), reverse=True)
+    by_change = sorted(tradeable, key=lambda row: safe_float(row[2].get("percentage"), 0.0), reverse=True)
+    volume_universe = by_volume[:SCAN_SYMBOL_LIMIT]
+    short_gainer_universe = [row for row in by_change if safe_float(row[2].get("percentage"), 0.0) >= SHORT_GAINER_MIN_24H_PCT][: max(SHORT_GAINER_TOP_PICK * 2, 6)]
+    union: Dict[str, tuple[str, Dict[str, Any], Dict[str, Any]]] = {}
+    for symbol, market, ticker in volume_universe + short_gainer_universe:
+        union[symbol] = (symbol, market, ticker)
+    if "BTC/USDT:USDT" in markets:
+        union["BTC/USDT:USDT"] = ("BTC/USDT:USDT", dict(markets.get("BTC/USDT:USDT") or {}), dict(tickers.get("BTC/USDT:USDT") or {}))
+    return list(union.values()), volume_universe, short_gainer_universe
+
+
+def choose_review_candidate(general_top: List[Dict[str, Any]], short_gainers: List[Dict[str, Any]]) -> Dict[str, Any] | None:
+    if len(open_position_symbols()) >= MAX_OPEN_POSITIONS:
+        return None
+    for pool in (short_gainers, general_top):
+        for row in pool:
+            gate = candidate_review_gate(row)
+            if not gate.get("ok"):
+                continue
+            picked = dict(row)
+            picked["force_openai_recheck"] = bool(gate.get("force_recheck", False))
+            return picked
+    return None
+
+
+def maybe_run_openai(general_top: List[Dict[str, Any]], short_gainers: List[Dict[str, Any]]) -> None:
     global OPENAI_TRADE_STATE
-    if not top_signals:
+    reviewed = choose_review_candidate(general_top, short_gainers)
+    if not reviewed:
         refresh_openai_dashboard()
         return
-    best = dict(top_signals[0])
     candidate = build_openai_trade_candidate(
-        signal=best,
-        market=best.get("market") or {},
+        signal=reviewed,
+        market=reviewed.get("market") or {},
         risk_status=STATE.get("risk_status") or {},
         portfolio=build_portfolio_snapshot(),
-        top_candidates=top_signals[: min(len(top_signals), 5)],
-        constraints={
-            "fixed_leverage": 20,
-            "min_leverage": 4,
-            "max_leverage": 25,
-            "min_margin_pct": 0.03,
-            "max_margin_pct": 0.08,
-        },
-        rank_index=1,
+        top_candidates=(short_gainers if reviewed.get("candidate_source") == "short_gainers" else general_top)[:5],
+        constraints=build_openai_constraints(),
+        rank_index=max(safe_int(reviewed.get("rank"), 1) - 1, 0),
     )
+    if reviewed.get("candidate_source") == "short_gainers":
+        candidate["short_gainer_context"] = {
+            "change_24h_pct": safe_float(((reviewed.get("openai_market_context") or {}).get("basic_market_data") or {}).get("change_24h_pct"), 0.0),
+            "scanner_reason": "top_24h_gainer_reversal",
+        }
     try:
         with OPENAI_LOCK:
             OPENAI_TRADE_STATE, result = consult_trade_decision(
@@ -1021,8 +1954,18 @@ def maybe_run_openai(top_signals: List[Dict[str, Any]]) -> None:
                 OPENAI_TRADE_CONFIG,
                 api_key_present=bool(OPENAI_API_KEY),
             )
-        best["auto_order"] = flatten_openai_result(result)
-        top_signals[0] = best
+        decision = dict(result.get("decision") or {})
+        if decision:
+            _apply_openai_trade_plan_to_signal(reviewed, decision, result)
+            reviewed["auto_order"] = flatten_openai_result(result)
+            action = apply_review_tracker(reviewed, result)
+            if action == "enter":
+                place_order_from_signal(reviewed)
+        for pool in (general_top, short_gainers):
+            for idx, row in enumerate(pool):
+                if row.get("symbol") == reviewed.get("symbol"):
+                    pool[idx] = reviewed
+                    break
         set_backend_thread("openai", "running", "OpenAI status: {}".format(result.get("status", "unknown")))
     except Exception as exc:
         refresh_openai_dashboard()
@@ -1035,63 +1978,50 @@ def perform_scan_cycle() -> None:
     try:
         markets = exchange.load_markets()
         tickers = exchange.fetch_tickers()
-        tradeable = []
-        for symbol, market in markets.items():
-            if not isinstance(market, dict):
-                continue
-            if not is_usdt_symbol(market):
-                continue
-            if not bool(market.get("active", True)):
-                continue
-            if market_type_label(market) == "spot":
-                continue
-            ticker = dict(tickers.get(symbol) or {})
-            if safe_float(ticker.get("quoteVolume"), 0.0) <= 0:
-                continue
-            tradeable.append((symbol, market, ticker))
-        tradeable.sort(key=lambda row: safe_float(row[2].get("quoteVolume"), 0.0), reverse=True)
-        selected = tradeable[:SCAN_SYMBOL_LIMIT]
-        top_signals: List[Dict[str, Any]] = []
-        for idx, (symbol, market, ticker) in enumerate(selected, start=1):
-            update_state(scan_progress="Scanning {}/{} {}".format(idx, len(selected), compact_symbol(symbol)))
+        selected_union, volume_universe, short_gainer_universe = build_scan_universe(markets, tickers)
+        context_map: Dict[str, Dict[str, Any]] = {}
+        for idx, (symbol, market, ticker) in enumerate(selected_union, start=1):
+            update_state(scan_progress="Scanning {}/{} {}".format(idx, len(selected_union), compact_symbol(symbol)))
             try:
-                context = build_market_context(symbol, ticker, market)
-                signal = build_signal_from_context(symbol, {"symbol": symbol, "pattern": "live_scan"}, context)
-                top_signals.append(signal)
+                context_map[symbol] = build_market_context(symbol, ticker, market)
             except Exception as exc:
-                top_signals.append(
-                    {
-                        "symbol": symbol,
-                        "direction": "neutral",
-                        "side": "long",
-                        "score": 0.0,
-                        "raw_score": 0.0,
-                        "priority_score": 0.0,
-                        "direction_confidence": 0.0,
-                        "trend_confidence": 0.0,
-                        "entry_quality": 0.0,
-                        "signal_grade": "C",
-                        "setup_label": "scan_error",
-                        "price": safe_float(ticker.get("last"), 0.0),
-                        "stop_loss": 0.0,
-                        "take_profit": 0.0,
-                        "rr_ratio": 0.0,
-                        "margin_pct": 0.03,
-                        "est_pnl": 0.0,
-                        "breakdown": {"Setup": "scan_error"},
-                        "desc": "Scan failed: {}".format(str(exc)[:120]),
-                        "trend_mode": "learning",
-                        "hold_reason": "normal_manage",
-                        "trend_note": "Scan failed, payload degraded.",
-                        "openai_market_context": {},
-                        "market": {"symbol": symbol},
-                    }
-                )
-        top_signals.sort(key=lambda row: abs(safe_float(row.get("priority_score"), 0.0)), reverse=True)
-        top_signals = top_signals[:TOP_SIGNAL_LIMIT]
-        for idx, row in enumerate(top_signals, start=1):
+                context_map[symbol] = {"basic_market_data": {"current_price": safe_float(ticker.get("last"), 0.0)}, "multi_timeframe": {}, "timeframe_bars": {}}
+                update_state(scan_progress="Context degraded for {}: {}".format(compact_symbol(symbol), str(exc)[:90]))
+        btc_context = context_map.get("BTC/USDT:USDT")
+        general_signals: List[Dict[str, Any]] = []
+        for symbol, market, ticker in volume_universe:
+            try:
+                general_signals.append(build_signal_from_context(symbol, {"symbol": symbol, "pattern": "general_scan"}, context_map[symbol], btc_context, candidate_source="general"))
+            except Exception as exc:
+                general_signals.append(build_scan_error_signal(symbol, ticker, exc, "general"))
+        short_gainer_signals: List[Dict[str, Any]] = []
+        for symbol, market, ticker in short_gainer_universe:
+            try:
+                context = context_map[symbol]
+                reversal = detect_short_reversal_signal(context)
+                if not reversal.get("ready"):
+                    continue
+                signal = build_signal_from_context(symbol, {"symbol": symbol, "pattern": "short_gainers"}, context, btc_context, candidate_source="short_gainers", forced_side="short")
+                signal["desc"] = " | ".join(reversal.get("triggers") or []) or signal.get("desc", "")
+                signal["short_gainer_reversal"] = reversal
+                short_gainer_signals.append(signal)
+            except Exception:
+                continue
+        general_top = diversified_selection(general_signals, GENERAL_TOP_PICK)
+        short_gainer_top = diversified_selection(
+            sorted(
+                short_gainer_signals,
+                key=lambda row: safe_float(((row.get("openai_market_context") or {}).get("basic_market_data") or {}).get("change_24h_pct"), 0.0),
+                reverse=True,
+            ),
+            SHORT_GAINER_TOP_PICK,
+        )
+        for idx, row in enumerate(general_top, start=1):
             row["rank"] = idx
-        maybe_run_openai(top_signals)
+        for idx, row in enumerate(short_gainer_top, start=1):
+            row["rank"] = idx
+        manage_pending_limit_orders()
+        maybe_run_openai(general_top, short_gainer_top)
         AI_PANEL["best_strategies"] = [
             {
                 "strategy": row.get("setup_label"),
@@ -1103,21 +2033,28 @@ def perform_scan_cycle() -> None:
                 "timeframes": "/".join(TIMEFRAMES),
                 "updated_at": tw_now_str(),
             }
-            for row in top_signals[:5]
+            for row in general_top[:5]
         ]
         AI_PANEL["market_db_info"] = {
-            "symbols": [row.get("symbol") for row in top_signals],
+            "symbols": [row.get("symbol") for row in general_top],
+            "short_gainers": [row.get("symbol") for row in short_gainer_top],
             "timeframes": list(TIMEFRAMES),
             "last_update": tw_now_str(),
         }
-        AUTO_BACKTEST_STATE["scanned_markets"] = len(top_signals)
-        AUTO_BACKTEST_STATE["target_count"] = len(selected)
-        AUTO_BACKTEST_STATE["db_symbols"] = [row.get("symbol") for row in top_signals]
+        AUTO_BACKTEST_STATE["scanned_markets"] = len(general_top) + len(short_gainer_top)
+        AUTO_BACKTEST_STATE["target_count"] = len(selected_union)
+        AUTO_BACKTEST_STATE["db_symbols"] = [row.get("symbol") for row in general_top] + [row.get("symbol") for row in short_gainer_top]
         AUTO_BACKTEST_STATE["db_last_update"] = tw_now_str()
-        update_state(top_signals=top_signals, scan_progress="Scan complete. {} symbols updated.".format(len(top_signals)))
-        update_market_overview(top_signals)
+        update_state(
+            top_signals=general_top,
+            general_top_signals=general_top,
+            short_gainer_signals=short_gainer_top,
+            scan_progress="Scan complete. {} general / {} short-gainer symbols ready.".format(len(general_top), len(short_gainer_top)),
+        )
+        update_market_overview(general_top or short_gainer_top)
         refresh_learning_summary()
-        set_backend_thread("scan", "running", "Updated {} symbols with live scan context.".format(len(top_signals)))
+        update_watchlist_state()
+        set_backend_thread("scan", "running", "Updated {} ranked symbols and {} short-gainer reversal candidates.".format(len(general_top), len(short_gainer_top)))
     except Exception as exc:
         update_state(scan_progress="Scan failed: {}".format(str(exc)[:120]))
         set_backend_thread("scan", "crashed", "Scan cycle failed.", error="{}\n{}".format(exc, traceback.format_exc()[:500]))
@@ -1273,6 +2210,14 @@ def api_force_backtest():
 def api_cancel_fvg_order():
     payload = request.get_json(silent=True) or {}
     symbol = str(payload.get("symbol") or "")
+    with STATE_LOCK:
+        fvg_orders = dict(STATE.get("fvg_orders") or {})
+        row = dict(fvg_orders.get(symbol) or {})
+    if row.get("order_id"):
+        try:
+            exchange.cancel_order(str(row.get("order_id")), symbol)
+        except Exception:
+            pass
     with STATE_LOCK:
         fvg_orders = dict(STATE.get("fvg_orders") or {})
         if symbol in fvg_orders:
