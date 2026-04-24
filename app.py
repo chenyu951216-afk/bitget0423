@@ -7610,6 +7610,52 @@ def _get_openai_pending_advice(symbol, now_ts=None):
     return advice
 
 
+def _pending_advice_should_block(sig, advice, now_ts=None):
+    sig = dict(sig or {})
+    advice = dict(advice or {})
+    if not advice:
+        return False
+    now_ts = float(now_ts or time.time())
+    symbol = str(sig.get('symbol') or '').strip()
+    advice_symbol = str(advice.get('symbol') or '').strip()
+    if symbol and advice_symbol and symbol != advice_symbol:
+        return False
+    expires_ts = _float_or_zero(advice.get('expires_ts'))
+    if expires_ts > 0 and now_ts > expires_ts:
+        return False
+    status = str(advice.get('status') or '').strip().lower()
+    if status in {'expired', 'cleared', 'filled', 'completed'}:
+        return False
+    current_side = _side_from_signal(sig)
+    advice_side = str(advice.get('side') or current_side).strip().lower()
+    if advice_side and advice_side != current_side:
+        return False
+    current_source = str(sig.get('candidate_source') or sig.get('source') or 'normal').strip().lower()
+    advice_source = str(advice.get('source') or current_source).strip().lower()
+    if advice_source and current_source and advice_source != current_source:
+        return False
+    trigger_type = str(advice.get('trigger_type') or 'none').strip().lower()
+    trigger_price = _float_or_zero(advice.get('trigger_price'))
+    zone_low = _float_or_zero(advice.get('watch_price_zone_low'))
+    zone_high = _float_or_zero(advice.get('watch_price_zone_high'))
+    has_zone = bool(zone_low > 0 and zone_high > 0)
+    actionable_trigger = trigger_type != 'none' and (
+        trigger_type == 'manual_review' or trigger_price > 0 or has_zone
+    )
+    if not actionable_trigger:
+        return False
+    fallback_generated = bool(advice.get('generated_by_fallback'))
+    created_ts = _float_or_zero(advice.get('created_ts'))
+    age_sec = max(now_ts - created_ts, 0.0) if created_ts > 0 else 0.0
+    manual_block_sec = max(int(float(OPENAI_TRADE_CONFIG.get('manual_review_block_minutes', 20) or 20)), 5) * 60
+    if trigger_type == 'manual_review' and trigger_price <= 0 and not has_zone:
+        if fallback_generated:
+            return False
+        if age_sec >= manual_block_sec:
+            return False
+    return True
+
+
 def _mark_openai_pending_advice(symbol, updates):
     symbol = str(symbol or '').strip()
     if not symbol:
@@ -8047,7 +8093,13 @@ def scan_thread():
                 for _sg in list(short_gainer_signals or []):
                     try:
                         _sym = str((_sg or {}).get('symbol') or '')
-                        if not _sym or _get_openai_pending_advice(_sym, order_scan_ts):
+                        if not _sym:
+                            continue
+                        _pending = _get_openai_pending_advice(_sym, order_scan_ts)
+                        if _pending and not _pending_advice_should_block(_sg, _pending, order_scan_ts):
+                            _clear_openai_pending_advice(_sym)
+                            _pending = None
+                        if _pending:
                             continue
                         _row = dict(_sg)
                         _row['_short_gainer_initial_review'] = True
@@ -8213,6 +8265,9 @@ def scan_thread():
                         except Exception:
                             openai_recently_sent = False
                         openai_pending_advice = dict(best.get('_pending_openai_advice') or {}) or _get_openai_pending_advice(best['symbol'], openai_now_ts)
+                        if openai_pending_advice and not _pending_advice_should_block(best, openai_pending_advice, openai_now_ts):
+                            _clear_openai_pending_advice(best['symbol'])
+                            openai_pending_advice = None
                         if openai_pending_advice:
                             openai_pending_advice = _refresh_openai_pending_advice_watch(best, openai_pending_advice, openai_now_ts, 'watching')
                             openai_pending_reason = str(best.get('_pending_openai_trigger_reason') or '')
