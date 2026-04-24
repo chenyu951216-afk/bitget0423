@@ -52,19 +52,20 @@ def default_trade_config(env_getter: Callable[[str, str], str]) -> Dict[str, Any
         'top_k_per_scan': max(_env_int(env_getter, 'OPENAI_TRADE_TOP_K', 10), 1),
         'sends_per_scan': max(_env_int(env_getter, 'OPENAI_TRADE_SENDS_PER_SCAN', 1), 1),
         'cooldown_minutes': max(_env_int(env_getter, 'OPENAI_TRADE_SYMBOL_COOLDOWN_MINUTES', 180), 1),
-        'same_payload_reuse_minutes': max(_env_int(env_getter, 'OPENAI_TRADE_SAME_PAYLOAD_REUSE_MINUTES', 45), 1),
-        'global_min_interval_minutes': max(_env_int(env_getter, 'OPENAI_TRADE_GLOBAL_MIN_INTERVAL_MINUTES', 0), 0),
+        'same_payload_reuse_minutes': max(_env_int(env_getter, 'OPENAI_TRADE_SAME_PAYLOAD_REUSE_MINUTES', 180), 1),
+        'global_min_interval_minutes': max(_env_int(env_getter, 'OPENAI_TRADE_GLOBAL_MIN_INTERVAL_MINUTES', 20), 0),
         'min_score_abs': max(_env_float(env_getter, 'OPENAI_TRADE_MIN_SCORE', 43.0), 0.0),
         'min_margin_pct': min(max(_env_float(env_getter, 'OPENAI_TRADE_MIN_MARGIN_PCT', 0.03), 0.005), 0.5),
         'max_margin_pct': min(max(_env_float(env_getter, 'OPENAI_TRADE_MAX_MARGIN_PCT', 0.08), 0.01), 0.8),
         'min_leverage': max(_env_int(env_getter, 'OPENAI_TRADE_MIN_LEVERAGE', 4), 1),
         'max_leverage': max(_env_int(env_getter, 'OPENAI_TRADE_MAX_LEVERAGE', 25), 1),
-        'max_output_tokens': max(_env_int(env_getter, 'OPENAI_TRADE_MAX_OUTPUT_TOKENS', 1280), 800),
+        'max_output_tokens': max(_env_int(env_getter, 'OPENAI_TRADE_MAX_OUTPUT_TOKENS', 960), 600),
         'request_timeout_sec': max(_env_float(env_getter, 'OPENAI_TRADE_TIMEOUT_SEC', 45.0), 5.0),
         'temperature': 0.2,
         'base_url': str(env_getter('OPENAI_RESPONSES_URL', 'https://api.openai.com/v1/responses') or 'https://api.openai.com/v1/responses').strip(),
         'reasoning_effort': str(env_getter('OPENAI_TRADE_REASONING_EFFORT', 'medium') or 'medium').strip(),
         'retry_reasoning_effort': str(env_getter('OPENAI_TRADE_RETRY_REASONING_EFFORT', 'low') or 'low').strip(),
+        'empty_retry_enabled': _env_bool(env_getter, 'OPENAI_TRADE_EMPTY_RETRY_ENABLE', False),
         'advice_ttl_minutes': max(_env_int(env_getter, 'OPENAI_TRADE_ADVICE_TTL_MINUTES', 240), 15),
     }
 
@@ -795,7 +796,7 @@ def _build_request_body(
     body = {
         'model': str(model or config.get('model') or 'gpt-5.4-mini'),
         'input': _build_messages(candidate, compact=compact_prompt),
-        'max_output_tokens': int(max_output_tokens or config.get('max_output_tokens', 1536) or 1536),
+        'max_output_tokens': int(max_output_tokens or config.get('max_output_tokens', 960) or 960),
     }
     effort = str(reasoning_effort if reasoning_effort is not None else config.get('reasoning_effort') or '').strip()
     if effort:
@@ -1020,7 +1021,7 @@ def consult_trade_decision(
     last_hash = str(symbol_state.get('last_payload_hash') or '')
     last_sent_ts = float(symbol_state.get('last_sent_ts', 0) or 0)
     cached_decision = dict(symbol_state.get('last_decision') or {})
-    same_payload_reuse_sec = max(int(config.get('same_payload_reuse_minutes', 45) or 45), 1) * 60
+    same_payload_reuse_sec = max(int(config.get('same_payload_reuse_minutes', 180) or 180), 1) * 60
     top_signature = _top_candidates_signature(candidate)
 
     if (
@@ -1099,16 +1100,29 @@ def consult_trade_decision(
         fallback_model = str(config.get('fallback_model') or '').strip()
         allow_upgrade = bool(config.get('allow_upgrade_model', False))
         primary_effort = str(config.get('reasoning_effort') or 'medium').strip()
-        retry_effort = primary_effort
-        max_tokens = int(config.get('max_output_tokens', 1536) or 1536)
+        retry_effort = str(config.get('retry_reasoning_effort') or primary_effort or 'medium').strip()
+        max_tokens = int(config.get('max_output_tokens', 960) or 960)
         attempts = [
-            {'model': primary_model, 'structured': False, 'effort': primary_effort, 'max_tokens': max_tokens, 'compact_prompt': False},
-            {'model': primary_model, 'structured': False, 'effort': retry_effort, 'max_tokens': min(max_tokens, 960), 'compact_prompt': True},
+            {
+                'model': primary_model,
+                'structured': True,
+                'effort': primary_effort,
+                'max_tokens': max_tokens,
+                'compact_prompt': True,
+            },
         ]
+        if bool(config.get('empty_retry_enabled', False)):
+            attempts.append({
+                'model': primary_model,
+                'structured': False,
+                'effort': retry_effort,
+                'max_tokens': min(max_tokens, 800),
+                'compact_prompt': True,
+            })
         if allow_upgrade and upgrade_model and upgrade_model != primary_model and rank <= 1 and score_abs >= max(float(config.get('min_score_abs', 43.0) or 43.0), 52.0):
-            attempts.append({'model': upgrade_model, 'structured': False, 'effort': retry_effort, 'max_tokens': min(max_tokens, 960), 'compact_prompt': True})
+            attempts.append({'model': upgrade_model, 'structured': True, 'effort': retry_effort, 'max_tokens': min(max_tokens, 800), 'compact_prompt': True})
         if fallback_model and fallback_model != primary_model:
-            attempts.append({'model': fallback_model, 'structured': False, 'effort': retry_effort, 'max_tokens': min(max_tokens, 960), 'compact_prompt': True})
+            attempts.append({'model': fallback_model, 'structured': True, 'effort': retry_effort, 'max_tokens': min(max_tokens, 800), 'compact_prompt': True})
 
         body = {}
         raw_text = ''
@@ -1187,13 +1201,12 @@ def consult_trade_decision(
             est_cost_usd = estimate_cost_usd(config, input_tokens=total_input_tokens, output_tokens=total_output_tokens, cached_input_tokens=total_cached_input_tokens)
             est_cost_twd = est_cost_usd * float(config.get('usd_to_twd', 32.0) or 32.0)
             detail = 'OpenAI returned no parseable trade JSON after retries: {}'.format(' ; '.join(empty_details))
-            fallback_decision = _fallback_trade_decision(candidate, reason=detail)
             symbol_state.update({
                 'last_payload_hash': payload_hash,
                 'last_sent_ts': now_ts,
                 'last_model': selected_model,
-                'last_decision': dict(fallback_decision or {}),
-                'last_status': 'consulted_fallback',
+                'last_decision': {},
+                'last_status': 'empty_response',
                 'last_response_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 'last_cost_twd': round(est_cost_twd, 4),
                 'last_attempt': dict(selected_attempt),
@@ -1214,17 +1227,17 @@ def consult_trade_decision(
                 state,
                 _build_recent_item(
                     candidate,
-                    status='consulted',
+                    status='empty_response',
                     action='skip',
-                    detail='OpenAI returned empty output; conservative fallback watch plan was generated from the same payload.',
-                    decision=fallback_decision,
-                    model='{} fallback'.format(selected_model),
+                    detail='OpenAI returned empty output; no AI analysis was accepted or synthesized locally.',
+                    decision={},
+                    model=selected_model,
                 ),
             )
             save_trade_state(state_path, state)
             return state, {
-                'status': 'consulted',
-                'decision': fallback_decision,
+                'status': 'empty_response',
+                'decision': None,
                 'payload_hash': payload_hash,
                 'symbol_state': symbol_state,
                 'usage': {
@@ -1235,8 +1248,8 @@ def consult_trade_decision(
                 'estimated_cost_twd': round(est_cost_twd, 4),
                 'estimated_cost_usd': round(est_cost_usd, 6),
                 'error': detail,
-                'fallback_used': True,
-                'model': '{} fallback'.format(selected_model),
+                'fallback_used': False,
+                'model': selected_model,
                 'attempt': dict(selected_attempt),
             }
         decision = _normalize_decision(raw_json, candidate)
