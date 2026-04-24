@@ -485,6 +485,9 @@ def _build_recent_item(candidate: Dict[str, Any], *, status: str, action: str = 
         'action': str(action or ''),
         'detail': str(detail or '')[:280],
         'model': str(model or ''),
+        'breakout_assessment': str(decision.get('breakout_assessment') or '')[:160],
+        'trade_side': str(decision.get('trade_side') or '')[:40],
+        'rr_ratio': _round(decision.get('rr_ratio'), 4),
         'order_type': str(decision.get('order_type') or ''),
         'entry_price': _round(decision.get('entry_price'), 8),
         'stop_loss': _round(decision.get('stop_loss'), 8),
@@ -593,6 +596,10 @@ def _response_output_tokens(body: Dict[str, Any]) -> int:
 def _json_schema() -> Dict[str, Any]:
     properties = {
         'should_trade': {'type': 'boolean'},
+        'action': {'type': 'string', 'enum': ['enter', 'observe', 'skip']},
+        'trade_side': {'type': 'string', 'enum': ['long', 'short']},
+        'breakout_assessment': _string_schema(160),
+        'rr_ratio': {'type': 'number'},
         'order_type': {'type': 'string', 'enum': ['market', 'limit']},
         'entry_price': {'type': 'number'},
         'stop_loss': {'type': 'number'},
@@ -643,6 +650,10 @@ def _json_schema() -> Dict[str, Any]:
         'properties': properties,
         'required': [
             'should_trade',
+            'action',
+            'trade_side',
+            'breakout_assessment',
+            'rr_ratio',
             'order_type',
             'entry_price',
             'stop_loss',
@@ -719,6 +730,7 @@ def _build_messages(candidate: Dict[str, Any], *, compact: bool = False) -> list
             f'Hard bounds: {constraint_brief}.\n'
             'Horizon is 30 minutes to 6 hours: use 1D/4H for bias, 1H for trend quality, 15m for entry, 5m for confirmation, 1m only for micro-timing.\n'
             'Compute entry_price, stop_loss, take_profit, and RR yourself from structure/current price/liquidity/invalidation; machine hints are low-trust only.\n'
+            'Set action to enter, observe, or skip; set trade_side to long or short; breakout_assessment must explicitly say real breakout, fake breakout, breakdown confirmation, or reversal fade.\n'
             'If limit, also return limit_cancel_price, limit_cancel_timeframe, limit_cancel_condition, limit_cancel_note; if market, set those limit-cancel fields to 0/empty.\n'
             'If not trading, still return the full object with a precise watch trigger, invalidation, timeframe, checklist, confirmations, invalidations, and recheck_reason so the bot can wait first and only ask again after the condition is clearly met.\n'
             'If force_recheck=true, either upgrade the previous watch idea into an executable plan or explain the single missing factor. For short_gainers, never short only because price rose; require failed continuation, exhaustion, reclaim failure, VWAP/EMA loss, or breakdown confirmation.\n'
@@ -747,6 +759,7 @@ def _build_messages(candidate: Dict[str, Any], *, compact: bool = False) -> list
             f'Generate one {trade_style} tactical execution-analysis object.\n'
             f'Hard bounds: {constraint_brief}; order_type must be market or limit; stop_loss and take_profit are mandatory protection orders.\n'
             'Compute entry_price, stop_loss, take_profit, and RR yourself from structure/current price/liquidity/invalidation; machine price/RR hints are low-trust only.\n'
+            'Set action to enter, observe, or skip; set trade_side to long or short; breakout_assessment must explicitly classify real breakout, fake breakout, breakdown confirmation, or reversal fade.\n'
             'All numeric fields must be raw JSON numbers, and the reply must be one complete JSON object only.\n'
             'If uncertain, still return the full schema with should_trade=false and a narrow watch plan.\n'
             'Analyze 1D/4H for larger bias, 1H for trend quality, 15m for the main entry frame, 5m for confirmation, and 1m only for micro-timing; optimize for holds around 30 minutes to 6 hours.\n'
@@ -839,6 +852,10 @@ def _fallback_trade_decision(candidate: Dict[str, Any], *, reason: str = '') -> 
         aggressive_note = 'A more aggressive long is acceptable only if price reclaims cleanly with improving participation.'
     return {
         'should_trade': False,
+        'action': 'observe',
+        'trade_side': side,
+        'breakout_assessment': 'Waiting for confirmation; fallback preserved the setup as an observation plan.',
+        'rr_ratio': round(abs((take_profit - entry_price) / max(abs(entry_price - stop_loss), 1e-9)), 4) if entry_price > 0 and stop_loss > 0 and take_profit > 0 else 0.0,
         'order_type': 'limit',
         'entry_price': entry_price,
         'stop_loss': stop_loss,
@@ -991,6 +1008,10 @@ def _normalize_decision(raw: Dict[str, Any], candidate: Dict[str, Any]) -> Dict[
             tp_default = entry_default * 0.98
     decision = {
         'should_trade': bool(raw.get('should_trade', False)),
+        'action': str(raw.get('action') or '').strip().lower(),
+        'trade_side': str(raw.get('trade_side') or side).strip().lower(),
+        'breakout_assessment': str(raw.get('breakout_assessment') or '').strip(),
+        'rr_ratio': max(_coerce_float(raw.get('rr_ratio', 0), 0.0), 0.0),
         'order_type': 'limit' if str(raw.get('order_type') or '').lower() == 'limit' else 'market',
         'entry_price': _coerce_float(raw.get('entry_price', entry_default), entry_default),
         'stop_loss': _coerce_float(raw.get('stop_loss', stop_default), stop_default),
@@ -1036,10 +1057,16 @@ def _normalize_decision(raw: Dict[str, Any], candidate: Dict[str, Any]) -> Dict[
         'limit_cancel_note': str(raw.get('limit_cancel_note') or '').strip(),
     }
     allowed_watch = {'none', 'pullback_to_entry', 'breakout_reclaim', 'breakdown_confirm', 'volume_confirmation', 'manual_review'}
+    allowed_actions = {'enter', 'observe', 'skip'}
     if decision['watch_trigger_type'] not in allowed_watch:
         decision['watch_trigger_type'] = 'none'
+    if decision['action'] not in allowed_actions:
+        decision['action'] = 'enter' if decision['should_trade'] else ('observe' if decision['watch_trigger_type'] != 'none' else 'skip')
+    if decision['trade_side'] not in {'long', 'short'}:
+        decision['trade_side'] = side
     if constraints.get('fixed_leverage'):
         decision['leverage'] = int(constraints.get('fixed_leverage') or decision['leverage'])
+    decision['breakout_assessment'] = decision['breakout_assessment'][:180]
     decision['market_read'] = decision['market_read'][:280]
     decision['entry_plan'] = decision['entry_plan'][:280]
     decision['entry_reason'] = decision['entry_reason'][:220]
@@ -1115,6 +1142,12 @@ def _normalize_decision(raw: Dict[str, Any], candidate: Dict[str, Any]) -> Dict[
         decision['thesis'] = 'Model approved the trade using the provided market, execution, and risk context.'
     if not decision['should_trade'] and not decision['reason_to_skip']:
         decision['reason_to_skip'] = 'Model rejected the setup after reviewing the full payload.'
+    if decision['rr_ratio'] <= 0:
+        decision['rr_ratio'] = round(abs((decision['take_profit'] - decision['entry_price']) / max(abs(decision['entry_price'] - decision['stop_loss']), 1e-9)), 4)
+    if decision['action'] == 'enter':
+        decision['should_trade'] = True
+    elif decision['action'] in ('observe', 'skip'):
+        decision['should_trade'] = False
     return decision
 
 
