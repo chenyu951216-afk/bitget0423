@@ -59,7 +59,7 @@ def default_trade_config(env_getter: Callable[[str, str], str]) -> Dict[str, Any
         'max_margin_pct': min(max(_env_float(env_getter, 'OPENAI_TRADE_MAX_MARGIN_PCT', 0.08), 0.01), 0.8),
         'min_leverage': max(_env_int(env_getter, 'OPENAI_TRADE_MIN_LEVERAGE', 4), 1),
         'max_leverage': max(_env_int(env_getter, 'OPENAI_TRADE_MAX_LEVERAGE', 25), 1),
-        'max_output_tokens': max(_env_int(env_getter, 'OPENAI_TRADE_MAX_OUTPUT_TOKENS', 960), 600),
+        'max_output_tokens': max(_env_int(env_getter, 'OPENAI_TRADE_MAX_OUTPUT_TOKENS', 1600), 800),
         'request_timeout_sec': max(_env_float(env_getter, 'OPENAI_TRADE_TIMEOUT_SEC', 45.0), 5.0),
         'temperature': 0.2,
         'base_url': str(env_getter('OPENAI_RESPONSES_URL', 'https://api.openai.com/v1/responses') or 'https://api.openai.com/v1/responses').strip(),
@@ -125,6 +125,18 @@ def _round(value: Any, digits: int = 4) -> float:
 
 def _short_text(value: Any, limit: int = 180) -> str:
     return str(value or '').replace('\n', ' ').strip()[:max(int(limit), 1)]
+
+
+def _string_schema(max_length: int) -> Dict[str, Any]:
+    return {'type': 'string', 'maxLength': max(int(max_length or 1), 1)}
+
+
+def _string_array_schema(max_items: int, item_max_length: int) -> Dict[str, Any]:
+    return {
+        'type': 'array',
+        'maxItems': max(int(max_items or 1), 1),
+        'items': _string_schema(item_max_length),
+    }
 
 
 def _compact_mapping(data: Dict[str, Any], keys: list[str], *, text_limit: int = 160) -> Dict[str, Any]:
@@ -250,18 +262,18 @@ def build_candidate_payload(
     )
     compact_market_context = {
         'style': _compact_mapping(style, ['holding_period', 'trade_goal', 'decision_priority'], text_limit=120),
-        'signal_context': _compact_mapping(dict(market_context.get('signal_context') or {}), ['side', 'score', 'raw_score', 'priority_score', 'entry_quality', 'current_price', 'setup_label', 'signal_grade', 'regime', 'regime_confidence', 'trend_confidence', 'rotation_adj', 'score_jump', 'atr_15m', 'atr_4h'], text_limit=80),
+        'signal_context': _compact_mapping(dict(market_context.get('signal_context') or {}), ['side', 'score', 'priority_score', 'entry_quality', 'current_price', 'setup_label', 'signal_grade', 'regime', 'regime_confidence', 'trend_confidence', 'rotation_adj', 'score_jump', 'atr_15m', 'atr_4h'], text_limit=80),
         'latest_closed_candle': _compact_mapping(dict(market_context.get('latest_closed_candle') or {}), ['direction', 'shape', 'body_pct', 'upper_wick_pct', 'lower_wick_pct', 'range_pct_of_price', 'close_position_pct'], text_limit=80),
         'momentum': _compact_mapping(dict(market_context.get('momentum') or {}), ['long_score', 'short_score', 'signals', 'trend_4h_up', 'trend_1d_up', 'higher_lows', 'lower_highs', 'volume_build', 'compression'], text_limit=120),
         'levels': _compact_mapping(dict(market_context.get('levels') or {}), ['dist_high_atr', 'dist_low_atr', 'nearest_support', 'nearest_resistance', 'support_levels', 'resistance_levels', 'recent_high', 'recent_low'], text_limit=120),
         'market_state': {
-            'ticker': _compact_mapping(dict(((market_context.get('market_state') or {}).get('ticker') or {})), ['last', 'bid', 'ask', 'spread_pct', 'quote_volume', 'percentage_24h', 'change_24h', 'high_24h', 'low_24h', 'mark_price', 'index_price'], text_limit=120),
+            'ticker': _compact_mapping(dict(((market_context.get('market_state') or {}).get('ticker') or {})), ['last', 'bid', 'ask', 'spread_pct', 'mark_price', 'index_price'], text_limit=120),
             'support_resistance': _compact_mapping(dict(((market_context.get('market_state') or {}).get('support_resistance') or {})), ['support', 'resistance', 'distance_to_support_pct', 'distance_to_resistance_pct'], text_limit=80),
         },
         'basic_market_data': _compact_mapping(dict(market_context.get('basic_market_data') or {}), ['symbol', 'exchange', 'market_type', 'current_price', 'change_24h_pct', 'quote_volume_24h', 'base_volume_24h', 'market_cap_usd', 'fdv_usd', 'circulating_supply', 'total_supply', 'funding_rate', 'open_interest', 'open_interest_value_usdt', 'long_short_ratio', 'top_trader_long_short_ratio', 'whale_position_change_pct'], text_limit=140),
         'liquidity_context': _compact_mapping(dict(market_context.get('liquidity_context') or {}), ['spread_pct', 'bid_depth_5', 'ask_depth_5', 'bid_depth_10', 'ask_depth_10', 'depth_imbalance_10', 'largest_bid_wall_price', 'largest_bid_wall_size', 'largest_ask_wall_price', 'largest_ask_wall_size', 'recent_trades_count', 'aggressive_buy_volume', 'aggressive_sell_volume', 'aggressive_buy_notional', 'aggressive_sell_notional', 'buy_sell_notional_ratio', 'cvd_notional', 'cvd_bias', 'volume_anomaly_5m', 'volume_anomaly_15m', 'errors'], text_limit=160),
         'derivatives_context': _compact_mapping(dict(market_context.get('derivatives_context') or {}), ['funding_rate', 'next_funding_time', 'open_interest', 'open_interest_value_usdt', 'open_interest_change_pct_5m', 'long_short_ratio', 'top_trader_long_short_ratio', 'whale_position_change_pct', 'basis_pct', 'mark_price', 'index_price', 'liquidation_volume_24h', 'liquidation_map_status', 'leverage_heat', 'leverage_heat_score', 'errors'], text_limit=160),
-        'news_context': dict(market_context.get('news_context') or {}),
+        'news_context': _compact_news_context(market_context.get('news_context') or {}),
         'multi_timeframe': {
             str(tf): _compact_mapping(
                 dict(row or {}),
@@ -270,10 +282,7 @@ def build_candidate_payload(
             )
             for tf, row in list(dict(market_context.get('multi_timeframe') or {}).items())[:6]
         },
-        'timeframe_bars': {
-            str(tf): list(rows or [])[:100]
-            for tf, rows in list(dict(market_context.get('timeframe_bars') or {}).items())[:6]
-        },
+        'timeframe_bars': _compact_timeframe_bars(dict(market_context.get('timeframe_bars') or {})),
         'pre_breakout_radar': _compact_mapping(dict(market_context.get('pre_breakout_radar') or {}), ['ready', 'phase', 'direction', 'score', 'summary', 'note', 'signals', 'tags'], text_limit=120),
         'execution_context': _compact_mapping(dict(market_context.get('execution_context') or {}), ['spread_pct', 'mark_last_deviation_pct', 'top_depth_ratio', 'api_error_streak', 'status', 'notes'], text_limit=120),
         'multi_timeframe_pressure_summary': _compact_mapping(dict(market_context.get('multi_timeframe_pressure_summary') or {}), ['side', 'aligned_timeframes', 'opposing_timeframes', 'nearest_blocking_timeframe', 'nearest_blocking_price', 'nearest_blocking_distance_atr', 'nearest_backing_timeframe', 'nearest_backing_price', 'nearest_backing_distance_atr', 'stacked_blocking_within_1atr', 'stacked_blocking_within_2atr'], text_limit=80),
@@ -345,6 +354,64 @@ def build_candidate_payload(
         'constraints': dict(constraints or {}),
         'force_recheck': bool(signal.get('force_openai_recheck', False)),
     }
+
+
+def _compact_news_context(news_context: Dict[str, Any]) -> Dict[str, Any]:
+    src = dict(news_context or {})
+    items = []
+    for row in list(src.get('items') or [])[:3]:
+        entry = dict(row or {})
+        compact_row = {}
+        for key in ('title', 'summary', 'published_at', 'url', 'source', 'coin'):
+            if key in entry and entry.get(key) not in (None, ''):
+                compact_row[key] = _short_text(entry.get(key), 120 if key != 'url' else 180)
+        if compact_row:
+            items.append(compact_row)
+    return {
+        'available': bool(src.get('available', False)),
+        'note': _short_text(src.get('note') or '', 180),
+        'items': items,
+    }
+
+
+def _compact_timeframe_bars(timeframe_bars: Dict[str, Any]) -> Dict[str, Any]:
+    out: Dict[str, Any] = {}
+    for tf, rows in list(dict(timeframe_bars or {}).items())[:6]:
+        seq = [list(row or []) for row in list(rows or [])[:100]]
+        if not seq:
+            continue
+        first_ts = 0
+        interval_ms = 0
+        compact_rows = []
+        try:
+            first_ts = int(seq[0][0] or 0)
+        except Exception:
+            first_ts = 0
+        if len(seq) >= 2:
+            try:
+                interval_ms = int(seq[1][0] or 0) - int(seq[0][0] or 0)
+            except Exception:
+                interval_ms = 0
+        for row in seq:
+            if len(row) < 6:
+                continue
+            try:
+                compact_rows.append([
+                    round(float(row[1]), 8),
+                    round(float(row[2]), 8),
+                    round(float(row[3]), 8),
+                    round(float(row[4]), 8),
+                    round(float(row[5]), 4),
+                ])
+            except Exception:
+                continue
+        if compact_rows:
+            out[str(tf)] = {
+                'start_ts': first_ts,
+                'interval_ms': interval_ms,
+                'rows': compact_rows,
+            }
+    return out
 
 
 def _short_label(status: str) -> str:
@@ -509,13 +576,13 @@ def _json_schema() -> Dict[str, Any]:
         'entry_price': {'type': 'number'},
         'stop_loss': {'type': 'number'},
         'take_profit': {'type': 'number'},
-        'market_read': {'type': 'string'},
-        'entry_plan': {'type': 'string'},
-        'entry_reason': {'type': 'string'},
-        'stop_loss_reason': {'type': 'string'},
-        'take_profit_plan': {'type': 'string'},
-        'if_missed_plan': {'type': 'string'},
-        'reference_summary': {'type': 'string'},
+        'market_read': _string_schema(240),
+        'entry_plan': _string_schema(240),
+        'entry_reason': _string_schema(180),
+        'stop_loss_reason': _string_schema(180),
+        'take_profit_plan': _string_schema(220),
+        'if_missed_plan': _string_schema(180),
+        'reference_summary': _string_schema(180),
         'chase_if_triggered': {'type': 'boolean'},
         'chase_trigger_price': {'type': 'number'},
         'chase_limit_price': {'type': 'number'},
@@ -526,28 +593,28 @@ def _json_schema() -> Dict[str, Any]:
         'leverage': {'type': 'integer'},
         'margin_pct': {'type': 'number'},
         'confidence': {'type': 'number'},
-        'thesis': {'type': 'string'},
-        'reason_to_skip': {'type': 'string'},
-        'risk_notes': {'type': 'array', 'items': {'type': 'string'}},
-        'aggressive_note': {'type': 'string'},
+        'thesis': _string_schema(180),
+        'reason_to_skip': _string_schema(180),
+        'risk_notes': _string_array_schema(4, 120),
+        'aggressive_note': _string_schema(180),
         'watch_trigger_type': {'type': 'string', 'enum': ['none', 'pullback_to_entry', 'breakout_reclaim', 'breakdown_confirm', 'volume_confirmation', 'manual_review']},
         'watch_trigger_price': {'type': 'number'},
         'watch_invalidation_price': {'type': 'number'},
-        'watch_note': {'type': 'string'},
-        'recheck_reason': {'type': 'string'},
-        'watch_timeframe': {'type': 'string'},
+        'watch_note': _string_schema(180),
+        'recheck_reason': _string_schema(180),
+        'watch_timeframe': _string_schema(40),
         'watch_price_zone_low': {'type': 'number'},
         'watch_price_zone_high': {'type': 'number'},
-        'watch_structure_condition': {'type': 'string'},
-        'watch_volume_condition': {'type': 'string'},
-        'watch_checklist': {'type': 'array', 'items': {'type': 'string'}},
-        'watch_confirmations': {'type': 'array', 'items': {'type': 'string'}},
-        'watch_invalidations': {'type': 'array', 'items': {'type': 'string'}},
+        'watch_structure_condition': _string_schema(180),
+        'watch_volume_condition': _string_schema(180),
+        'watch_checklist': _string_array_schema(5, 120),
+        'watch_confirmations': _string_array_schema(5, 120),
+        'watch_invalidations': _string_array_schema(5, 120),
         'watch_recheck_priority': {'type': 'number'},
         'limit_cancel_price': {'type': 'number'},
-        'limit_cancel_timeframe': {'type': 'string'},
-        'limit_cancel_condition': {'type': 'string'},
-        'limit_cancel_note': {'type': 'string'},
+        'limit_cancel_timeframe': _string_schema(40),
+        'limit_cancel_condition': _string_schema(160),
+        'limit_cancel_note': _string_schema(160),
     }
     return {
         'type': 'object',
@@ -559,17 +626,9 @@ def _json_schema() -> Dict[str, Any]:
 
 def _response_shape_hint() -> str:
     return (
-        'Return one JSON object only. '
-        'Required numeric fields: entry_price, stop_loss, take_profit, chase_trigger_price, '
-        'chase_limit_price, trail_trigger_atr_hint, trail_pct_hint, breakeven_atr_hint, '
-        'dynamic_take_profit_hint, leverage, margin_pct, confidence, watch_trigger_price, '
-        'watch_invalidation_price, watch_price_zone_low, watch_price_zone_high, watch_recheck_priority, limit_cancel_price. '
-        'Required text/array fields: market_read, entry_plan, entry_reason, stop_loss_reason, take_profit_plan, '
-        'if_missed_plan, reference_summary, thesis, reason_to_skip, risk_notes, aggressive_note, watch_note, '
-        'recheck_reason, watch_timeframe, watch_structure_condition, watch_volume_condition, '
-        'limit_cancel_timeframe, limit_cancel_condition, limit_cancel_note, '
-        'watch_checklist, watch_confirmations, watch_invalidations. '
-        'The only real market data is the candidate payload JSON below; do not treat any schema reminder as market data.'
+        'Return exactly one complete JSON object that satisfies the schema. '
+        'Use raw JSON numbers for numeric fields, concise strings, and short arrays. '
+        'The only market data is the candidate payload JSON below.'
     )
 
 
@@ -598,7 +657,7 @@ def _build_messages(candidate: Dict[str, Any], *, compact: bool = False) -> list
     constraint_brief = _constraint_brief(candidate, constraints)
     if compact:
         system_text = (
-            'You are a crypto perpetual futures execution planner for short-term trading. '
+            'You are producing a tactical execution-analysis object for an internal short-term crypto perpetual futures engine. '
             'Use only the supplied payload, especially timeframe_bars, multi_timeframe, multi_timeframe_pressure, '
             'liquidity_context, derivatives_context, execution_context, risk, portfolio, and reference_context. '
             'Return one complete JSON object only, with raw JSON numbers in numeric fields and no commentary outside the object. '
@@ -607,19 +666,20 @@ def _build_messages(candidate: Dict[str, Any], *, compact: bool = False) -> list
             'JSON shape reminder: ' + schema_hint
         )
         user_text = (
-            f'Decide whether to place a {trade_style} crypto perpetual futures order.\n'
+            f'Generate one {trade_style} tactical execution-analysis object.\n'
             f'Hard bounds: {constraint_brief}.\n'
             'Horizon is 30 minutes to 6 hours: use 1D/4H for bias, 1H for trend quality, 15m for entry, 5m for confirmation, 1m only for micro-timing.\n'
             'Compute entry_price, stop_loss, take_profit, and RR yourself from structure/current price/liquidity/invalidation; machine hints are low-trust only.\n'
             'If limit, also return limit_cancel_price, limit_cancel_timeframe, limit_cancel_condition, limit_cancel_note; if market, set those limit-cancel fields to 0/empty.\n'
             'If not trading, still return the full object with a precise watch trigger, invalidation, timeframe, checklist, confirmations, invalidations, and recheck_reason so the bot can wait first and only ask again after the condition is clearly met.\n'
             'If force_recheck=true, either upgrade the previous watch idea into an executable plan or explain the single missing factor. For short_gainers, never short only because price rose; require failed continuation, exhaustion, reclaim failure, VWAP/EMA loss, or breakdown confirmation.\n'
+            'timeframe_bars format: each timeframe uses start_ts + interval_ms, and rows are [open,high,low,close,volume] from oldest to newest.\n'
             'Candidate payload JSON:\n'
             + json.dumps(candidate, ensure_ascii=False, separators=(',', ':'))
         )
     else:
         system_text = (
-            'You are a crypto perpetual futures execution planner for short-term trading. '
+            'You are producing a tactical execution-analysis object for an internal short-term crypto perpetual futures engine. '
             'Use every field in the candidate payload, especially multi-timeframe market context, latest closed candles, '
             'momentum, volatility, volume expansion, execution context, liquidity_context, derivatives_context, '
             'basic_market_data, timeframe_bars, risk state, and reference analysis. '
@@ -635,13 +695,14 @@ def _build_messages(candidate: Dict[str, Any], *, compact: bool = False) -> list
             'JSON shape reminder: ' + schema_hint
         )
         user_text = (
-            f'Decide whether to place a {trade_style} crypto perpetual futures order.\n'
+            f'Generate one {trade_style} tactical execution-analysis object.\n'
             f'Hard bounds: {constraint_brief}; order_type must be market or limit; stop_loss and take_profit are mandatory protection orders.\n'
             'Compute entry_price, stop_loss, take_profit, and RR yourself from structure/current price/liquidity/invalidation; machine price/RR hints are low-trust only.\n'
             'All numeric fields must be raw JSON numbers, and the reply must be one complete JSON object only.\n'
             'If uncertain, still return the full schema with should_trade=false and a narrow watch plan.\n'
             'Analyze 1D/4H for larger bias, 1H for trend quality, 15m for the main entry frame, 5m for confirmation, and 1m only for micro-timing; optimize for holds around 30 minutes to 6 hours.\n'
             'Use timeframe_bars, multi_timeframe, multi_timeframe_pressure, liquidity_context, derivatives_context, execution_context, and news_context together rather than relying on a single block.\n'
+            'timeframe_bars format: each timeframe uses start_ts + interval_ms, and rows are [open,high,low,close,volume] from oldest to newest.\n'
             'market_read must explicitly mention trend state, key support/resistance, and fake-breakout risk.\n'
             'Choose one best executable path now: market, precise limit pullback/retest, or no trade yet with a precise recheck trigger. Be slightly selective, not overly selective: if the thesis is still good but price is stretched, prefer a better limit entry or confirmation trigger instead of blanket rejection. If structure, invalidation, and confirmation already align, do not hide behind vague caution.\n'
             'If order_type is limit, also return limit_cancel_price, limit_cancel_timeframe, limit_cancel_condition, and limit_cancel_note so the bot can cancel before fill if invalidated; for market, set those fields to 0/empty.\n'
@@ -793,10 +854,14 @@ def _build_request_body(
     max_output_tokens: int | None = None,
     compact_prompt: bool = False,
 ) -> Dict[str, Any]:
+    effective_max_output_tokens = max(
+        int(max_output_tokens or config.get('max_output_tokens', 1600) or 1600),
+        1600 if structured else 900,
+    )
     body = {
         'model': str(model or config.get('model') or 'gpt-5.4-mini'),
         'input': _build_messages(candidate, compact=compact_prompt),
-        'max_output_tokens': int(max_output_tokens or config.get('max_output_tokens', 960) or 960),
+        'max_output_tokens': effective_max_output_tokens,
     }
     effort = str(reasoning_effort if reasoning_effort is not None else config.get('reasoning_effort') or '').strip()
     if effort:
@@ -817,6 +882,41 @@ def _build_request_body(
             }
         }
     return body
+
+
+def _response_diagnostics(body: Dict[str, Any]) -> str:
+    src = dict(body or {})
+    parts = []
+    status = str(src.get('status') or '').strip()
+    if status:
+        parts.append(f'status={status}')
+    incomplete = dict(src.get('incomplete_details') or {})
+    if incomplete:
+        reason = str(incomplete.get('reason') or '').strip()
+        if reason:
+            parts.append(f'incomplete_reason={reason}')
+    try:
+        usage = _response_usage(src)
+        if usage:
+            parts.append('usage_in={} usage_out={} usage_cached={}'.format(
+                int(usage.get('input_tokens', 0) or 0),
+                int(usage.get('output_tokens', 0) or 0),
+                int(usage.get('input_cached_tokens', usage.get('cached_input_tokens', 0)) or 0),
+            ))
+    except Exception:
+        pass
+    item_types = []
+    for item in list(src.get('output') or [])[:8]:
+        kind = str((item or {}).get('type') or '').strip()
+        if kind:
+            item_types.append(kind)
+        for content in list((item or {}).get('content') or [])[:8]:
+            ctype = str((content or {}).get('type') or '').strip()
+            if ctype:
+                item_types.append(ctype)
+    if item_types:
+        parts.append('output_types={}'.format(','.join(item_types[:8])))
+    return ' | '.join(parts[:6])
 
 
 def _normalize_decision(raw: Dict[str, Any], candidate: Dict[str, Any]) -> Dict[str, Any]:
@@ -1101,7 +1201,7 @@ def consult_trade_decision(
         allow_upgrade = bool(config.get('allow_upgrade_model', False))
         primary_effort = str(config.get('reasoning_effort') or 'medium').strip()
         retry_effort = str(config.get('retry_reasoning_effort') or primary_effort or 'medium').strip()
-        max_tokens = int(config.get('max_output_tokens', 960) or 960)
+        max_tokens = max(int(config.get('max_output_tokens', 1600) or 1600), 1600)
         attempts = [
             {
                 'model': primary_model,
@@ -1161,7 +1261,7 @@ def consult_trade_decision(
                     structured=False,
                     model=selected_model,
                     reasoning_effort=retry_effort,
-                    max_output_tokens=min(max_tokens, 960),
+                    max_output_tokens=max(900, min(max_tokens, 1600)),
                     compact_prompt=True,
                 )
                 resp = requests.post(base_url, headers=headers, json=request_body, timeout=timeout_sec)
@@ -1189,11 +1289,13 @@ def consult_trade_decision(
             raw_json = _parse_json_text(raw_text)
             if raw_json:
                 break
-            empty_details.append('{} structured={} effort={} output_tokens={}'.format(
+            diag = _response_diagnostics(body)
+            empty_details.append('{} structured={} effort={} output_tokens={} {}'.format(
                 selected_model,
                 bool(attempt.get('structured', True)),
                 str(attempt.get('effort') or ''),
                 _response_output_tokens(body),
+                diag,
             ))
             if logger:
                 logger('OpenAI empty/invalid JSON response: {} | {}'.format(symbol, empty_details[-1]))
