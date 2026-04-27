@@ -1,0 +1,571 @@
+﻿<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Crypto Trading Bot Dashboard</title>
+  <style>
+    :root{
+      --bg:#071022;
+      --panel:#0f1c3a;
+      --line:#1e3566;
+      --text:#e7f1ff;
+      --muted:#8da8d2;
+      --good:#28d69a;
+      --warn:#f5c66c;
+      --bad:#ff6b8a;
+      --cyan:#5edfff;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(180deg,#060d1e,#071022 40%,#08142b);color:var(--text);font-family:"Segoe UI",Tahoma,Arial,sans-serif}
+    .shell{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+    .side{padding:16px;border-right:1px solid var(--line);background:rgba(5,12,28,.88)}
+    .brand{padding:14px;border:1px solid var(--line);border-radius:14px;background:#0b1733}
+    .brand h1{margin:0;font-size:22px}
+    .brand p{margin:8px 0 0;color:var(--muted);font-size:12px;line-height:1.5}
+    .nav{margin-top:14px;display:grid;gap:8px}
+    .nav button{border:1px solid var(--line);background:#0d1a37;color:var(--text);padding:10px 12px;border-radius:10px;text-align:left;cursor:pointer}
+    .nav button.active{border-color:#2f5fb2;background:#112552}
+    .runtime{margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:12px;background:#0b1733}
+    .runtime h3{margin:0 0 8px;font-size:13px;color:#b8d3ff}
+    .runtime .row{font-size:12px;color:var(--muted);margin-top:6px}
+    .main{padding:16px}
+    .top{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+    .btn{border:1px solid var(--line);background:#112552;color:var(--text);padding:8px 12px;border-radius:10px;cursor:pointer}
+    .pill{border:1px solid var(--line);background:#0d1a37;padding:8px 12px;border-radius:999px;font-size:12px}
+    .section{display:none}
+    .section.active{display:block}
+    .grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px}
+    .panel{grid-column:span 12;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
+    .span-8{grid-column:span 8}
+    .span-6{grid-column:span 6}
+    .span-4{grid-column:span 4}
+    .span-3{grid-column:span 3}
+    .head{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+    .head h3{margin:0;font-size:16px}
+    .head p{margin:4px 0 0;color:var(--muted);font-size:12px}
+    .kv{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    .item{background:#0a1733;border:1px solid #1a315f;border-radius:10px;padding:8px}
+    .k{font-size:11px;color:var(--muted)}
+    .v{font-size:18px;font-weight:700;margin-top:4px}
+    .signals{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .card{background:#0a1733;border:1px solid #1a315f;border-radius:10px;padding:10px}
+    .row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+    .badge{display:inline-block;font-size:11px;padding:4px 8px;border-radius:999px;border:1px solid #2a4579;background:#102247;color:#cfe2ff}
+    .good{color:var(--good)}
+    .bad{color:var(--bad)}
+    .warn{color:var(--warn)}
+    .muted{color:var(--muted)}
+    .desc{margin-top:8px;font-size:12px;line-height:1.5;color:#d3e5ff}
+    table{width:100%;border-collapse:collapse}
+    th,td{border-bottom:1px solid #1a315f;padding:8px 6px;font-size:12px;text-align:left}
+    th{color:var(--muted);font-weight:500}
+    .list{display:grid;gap:8px}
+    .hist{background:#0a1733;border:1px solid #1a315f;border-radius:10px;padding:10px;font-size:12px}
+    pre{margin:0;white-space:pre-wrap;word-break:break-word;font-size:12px;color:#d6e8ff}
+    @media (max-width:1200px){
+      .shell{grid-template-columns:1fr}
+      .side{border-right:none;border-bottom:1px solid var(--line)}
+      .span-8,.span-6,.span-4,.span-3{grid-column:span 12}
+      .signals{grid-template-columns:1fr}
+      .kv{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="side">
+      <div class="brand">
+        <h1>Crypto AI Bot</h1>
+        <p>鎺冩弿銆佹寔鍊夈€丱penAI 姹虹瓥鑸囧煼琛岀媭鎱嬬洠鎺с€?/p>
+      </div>
+      <div class="nav">
+        <button class="active" data-sec="overview">绺借</button>
+        <button data-sec="signals">鍊欓伕淇¤櫉</button>
+        <button data-sec="positions">鎸佸€夎垏鎺涘柈</button>
+        <button data-sec="ai">AI 姹虹瓥</button>
+      </div>
+      <div class="runtime">
+        <h3>Runtime</h3>
+        <div class="row">鏈€寰屾洿鏂? <b id="last-update">--</b></div>
+        <div class="row">鎺冩弿閫插害: <b id="scan-progress">--</b></div>
+        <div class="row">棰ㄦ帶: <b id="risk-flag-side">--</b></div>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="top">
+        <button class="btn" onclick="refreshNow()">绔嬪嵆鍒锋柊</button>
+        <button class="btn" onclick="releaseRiskOverride()">瑙ｉ櫎棰ㄦ帶鏆仠</button>
+        <button class="btn" onclick="closeAll()">鍏ㄩ儴骞冲€?/button>
+        <span class="pill">AI 妯″紡: <b id="ai-mode">--</b></span>
+        <span class="pill">Live 绛嗘暩: <b id="ai-live-count">0</b></span>
+      </div>
+
+      <section class="section active" id="section-overview">
+        <div class="grid">
+          <div class="panel">
+            <div class="kv">
+              <div class="item"><div class="k">甯虫埗娆婄泭</div><div class="v" id="equity">0</div></div>
+              <div class="item"><div class="k">绺芥湭瀵︾従 PnL</div><div class="v" id="total-pnl">0</div></div>
+              <div class="item"><div class="k">鐣跺墠闁€妾?/div><div class="v" id="threshold">--</div></div>
+              <div class="item"><div class="k">闁€妾婚殠娈?/div><div class="v" id="threshold-phase">--</div></div>
+              <div class="item"><div class="k">棰ㄦ帶鐙€鎱?/div><div class="v" id="risk-flag">--</div></div>
+              <div class="item"><div class="k">棰ㄦ帶瑾槑</div><div class="v" id="risk-note">--</div></div>
+              <div class="item"><div class="k">甯傚牬鏂瑰悜</div><div class="v" id="market-direction">--</div></div>
+              <div class="item"><div class="k">甯傚牬鍨嬫厠</div><div class="v" id="market-pattern">--</div></div>
+              <div class="item"><div class="k">甯傚牬闋愭脯</div><div class="v" id="market-prediction">--</div></div>
+              <div class="item"><div class="k">瀛哥繏绛嗘暩</div><div class="v" id="learn-total">0</div></div>
+              <div class="item"><div class="k">瀛哥繏鍕濈巼</div><div class="v" id="learn-winrate">0%</div></div>
+              <div class="item"><div class="k">瀛哥繏骞冲潎鎼嶇泭</div><div class="v" id="learn-avg">0%</div></div>
+            </div>
+            <div class="desc"><b>鏂拌仦/瑾槑:</b> <span id="news-title">--</span></div>
+          </div>
+          <div class="panel span-6">
+            <div class="head"><h3>鑳屾櫙鍩疯绶?/h3></div>
+            <div class="list" id="backend-threads"></div>
+          </div>
+          <div class="panel span-6">
+            <div class="head"><h3>AI 绛栫暐鎺掑悕</h3></div>
+            <div class="list" id="ai-strategies"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="section-signals">
+        <div class="grid">
+          <div class="panel span-6">
+            <div class="head"><h3>一般排行榜（順勢）</h3></div>
+            <div class="signals" id="signals"></div>
+          </div>
+          <div class="panel span-6">
+            <div class="head"><h3>空漲幅榜（逆勢）</h3></div>
+            <div class="signals" id="short-gainers"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="section-positions">
+        <div class="grid">
+          <div class="panel span-8">
+            <div class="head"><h3>鎸佸€?/h3></div>
+            <table>
+              <thead><tr><th>骞ｇó</th><th>鏂瑰悜</th><th>閫插牬</th><th>鏈鐝?/th><th>杩借工/淇濊</th></tr></thead>
+              <tbody id="positions"></tbody>
+            </table>
+          </div>
+          <div class="panel span-4">
+            <div class="head"><h3>鎺涘柈</h3></div>
+            <div class="list" id="fvg-orders-body"></div>
+          </div>
+          <div class="panel">
+            <div class="head"><h3>浜ゆ槗/涓嬪柈瑷橀寗</h3></div>
+            <div class="list" id="history"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="section-ai">
+        <div class="grid">
+          <div class="panel">
+            <div class="head">
+              <div>
+                <h3>OpenAI 鎺у埗鍙?/h3>
+                <p>椤ず閫佸銆侀爯绠椼€侀樆鎿嬪師鍥犮€佸緟瑙€瀵熻垏杩戞湡姹虹瓥銆?/p>
+              </div>
+              <button class="btn" onclick="runAiBacktest()">瑙哥櫦鍥炴脯</button>
+            </div>
+            <div class="kv">
+              <div class="item"><div class="k">OpenAI 鍟熺敤</div><div class="v" id="openai-enabled">--</div></div>
+              <div class="item"><div class="k">API 灏辩窉</div><div class="v" id="openai-api-ready">--</div></div>
+              <div class="item"><div class="k">妯″瀷</div><div class="v" id="openai-model">--</div></div>
+              <div class="item"><div class="k">Top K</div><div class="v" id="openai-top-k">--</div></div>
+              <div class="item"><div class="k">姣忚吉閫佸</div><div class="v" id="openai-send-limit">--</div></div>
+              <div class="item"><div class="k">鍐峰嵒</div><div class="v" id="openai-cooldown">--</div></div>
+              <div class="item"><div class="k">闋愮畻(绺?</div><div class="v" id="openai-budget-total">--</div></div>
+              <div class="item"><div class="k">闋愮畻(宸茬敤)</div><div class="v" id="openai-budget-spent">--</div></div>
+              <div class="item"><div class="k">闋愮畻(鍓╅)</div><div class="v" id="openai-budget-remaining">--</div></div>
+              <div class="item"><div class="k">API Calls</div><div class="v" id="openai-api-calls">--</div></div>
+              <div class="item"><div class="k">寰呰瀵熸暩</div><div class="v" id="openai-pending-count">--</div></div>
+              <div class="item"><div class="k">Gate 鐙€鎱?/div><div class="v" id="openai-gate-status">--</div></div>
+            </div>
+            <div style="margin-top:10px"><pre id="openai-last-error">灏氱劇 OpenAI 閷銆?/pre></div>
+            <div style="margin-top:10px"><pre id="openai-gate-debug">灏氱劇 Gate 瑷婃伅銆?/pre></div>
+            <div style="margin-top:10px"><pre id="ai-backtest-summary">灏氭湭瑙哥櫦鍥炴脯銆?/pre></div>
+          </div>
+
+          <div class="panel span-6">
+            <div class="head"><h3>AI 寰呰瀵?/h3></div>
+            <div class="list" id="openai-pending-advice"></div>
+          </div>
+          <div class="panel span-6">
+            <div class="head"><h3>AI 杩戞湡姹虹瓥</h3></div>
+            <div class="list" id="openai-decisions"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const fmt = (n, d = 2) => {
+      const x = Number(n || 0);
+      return Number.isFinite(x) ? x.toFixed(d) : "0.00";
+    };
+    const esc = (s) => String(s == null ? "" : s)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+
+    const setText = (id, value, cls = "") => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = value == null ? "--" : String(value);
+      if (cls) el.className = cls;
+    };
+
+    const navButtons = Array.from(document.querySelectorAll(".nav button"));
+    navButtons.forEach(btn => {
+      btn.addEventListener("click", () => {
+        navButtons.forEach(x => x.classList.toggle("active", x === btn));
+        const sec = btn.dataset.sec;
+        document.querySelectorAll(".section").forEach(s => s.classList.toggle("active", s.id === "section-" + sec));
+      });
+    });
+
+    async function fetchJson(url, timeoutMs){
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), Math.max(Number(timeoutMs || 0), 1200));
+      try{
+        const res = await fetch(url, {signal: ctl.signal});
+        if (!res.ok) throw new Error("HTTP " + res.status + " " + url);
+        return await res.json();
+      }finally{
+        clearTimeout(timer);
+      }
+    }
+
+    async function fetchMergedState(){
+      const [base, pos, panel] = await Promise.all([
+        fetchJson("/api/state_lite", 4500),
+        fetchJson("/api/positions_state", 4500).catch(() => ({})),
+        fetchJson("/api/ai_panel_state", 4500).catch(() => ({}))
+      ]);
+      return Object.assign({}, base || {}, pos || {}, panel || {});
+    }
+
+    function renderSignalCards(targetId, list, emptyText, sourceLabel){
+      const el = document.getElementById(targetId);
+      if (!el) return;
+      if (!Array.isArray(list) || !list.length){
+        el.innerHTML = `<div class="muted">${esc(emptyText)}</div>`;
+        return;
+      }
+      el.innerHTML = list.map(s => {
+        const side = String(s.side || "").toLowerCase() === "short" || Number(s.score || 0) < 0 ? "short" : "long";
+        const scoreCls = side === "long" ? "good" : "bad";
+        const ao = s.auto_order || {};
+        const entry = Number(s.planned_entry_price || s.price || 0);
+        const orderStatus = ao.order_error ? `下單失敗: ${ao.order_error}` : (ao.will_order === false ? "AI未放行" : "可下單");
+        return `
+          <div class="card">
+            <div class="row">
+              <b>${esc((s.symbol || "").replace("/USDT:USDT",""))}</b>
+              <span class="${scoreCls}">${fmt(s.score,1)}</span>
+            </div>
+            <div style="margin-top:6px">
+              <span class="badge">${esc(sourceLabel)}</span>
+              <span class="badge">${esc(side)}</span>
+              <span class="badge">rank ${esc(s.rank || "--")}</span>
+              <span class="badge">RR ${fmt(s.rr_ratio || 0, 2)}</span>
+              <span class="badge">entry ${fmt(entry, 6)}</span>
+              <span class="badge">sl ${fmt(s.stop_loss, 6)}</span>
+              <span class="badge">tp ${fmt(s.take_profit, 6)}</span>
+            </div>
+            <div class="desc">${esc(orderStatus)}</div>
+            <div class="desc">${esc(s.desc || s.setup_label || "")}</div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderSignals(list){
+      renderSignalCards("signals", list, "目前沒有一般排行榜候選信號。", "順勢");
+    }
+
+    function renderShortGainers(list){
+      renderSignalCards("short-gainers", list, "目前沒有空漲幅榜候選信號。", "逆勢");
+    }
+
+    function renderPositions(list, trailingInfo, protectionState){
+      const el = document.getElementById("positions");
+      if (!el) return;
+      if (!Array.isArray(list) || !list.length){
+        el.innerHTML = '<tr><td colspan="5" class="muted">鐩墠娌掓湁鎸佸€夈€?/td></tr>';
+        return;
+      }
+      el.innerHTML = list.map(p => {
+        const pnl = Number(p.unrealizedPnl || 0);
+        const trail = trailingInfo && trailingInfo[p.symbol] ? trailingInfo[p.symbol] : null;
+        const prot = protectionState && protectionState[p.symbol] ? protectionState[p.symbol] : null;
+        const trailTxt = trail ? `stop_stage=${trail.stop_stage || "--"} trail=${fmt(trail.trail_pct || 0,3)}` : "--";
+        const protErr = prot ? [prot.sl_error, prot.tp_error].filter(Boolean).join(" | ") : "";
+        const protTxt = prot ? `SL:${prot.sl_ok ? "OK":"FAIL"} TP:${prot.tp_ok ? "OK":"FAIL"} (${prot.sl_mode || "--"})${protErr ? " err=" + protErr : ""}` : "--";
+        return `
+          <tr>
+            <td>${esc((p.symbol || "").replace("/USDT:USDT",""))}</td>
+            <td>${esc(p.side || "--")}</td>
+            <td>${fmt(p.entryPrice || 0, 6)}</td>
+            <td class="${pnl >= 0 ? "good":"bad"}">${pnl >= 0 ? "+" : ""}${fmt(pnl, 6)}</td>
+            <td><div>${esc(trailTxt)}</div><div class="muted">${esc(protTxt)}</div></td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function renderFvgOrders(fvgOrders){
+      const el = document.getElementById("fvg-orders-body");
+      if (!el) return;
+      const rows = Object.values(fvgOrders || {});
+      if (!rows.length){
+        el.innerHTML = '<div class="muted">鐩墠娌掓湁鎺涘柈銆?/div>';
+        return;
+      }
+      el.innerHTML = rows.map(o => `
+        <div class="hist">
+          <div><b>${esc((o.symbol || "").replace("/USDT:USDT",""))}</b> ${esc(o.side || "--")}</div>
+          <div class="muted">id=${esc(o.order_id || "--")} price=${fmt(o.price || 0, 6)} sl=${fmt(o.stop_loss || 0, 6)} tp=${fmt(o.take_profit || 0, 6)}</div>
+          <div style="margin-top:6px"><button class="btn" onclick="cancelFvgOrder('${esc(o.symbol || "")}')">鍙栨秷鎺涘柈</button></div>
+        </div>
+      `).join("");
+    }
+
+    function renderHistory(list){
+      const el = document.getElementById("history");
+      if (!el) return;
+      if (!Array.isArray(list) || !list.length){
+        el.innerHTML = '<div class="muted">鐩墠娌掓湁瑷橀寗銆?/div>';
+        return;
+      }
+      el.innerHTML = list.slice(0, 25).map(h => `
+        <div class="hist">
+          <div><b>${esc((h.symbol || "").replace("/USDT:USDT",""))}</b> ${esc(h.side || "--")} @ ${fmt(h.price || 0, 6)}</div>
+          <div class="muted">${esc(h.time || "--")} | score=${fmt(h.score || 0,1)} | sl=${fmt(h.stop_loss || 0,6)} | tp=${fmt(h.take_profit || 0,6)}${h.error ? " | error=" + esc(h.error) : ""}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderAiStrategies(list){
+      const el = document.getElementById("ai-strategies");
+      if (!el) return;
+      if (!Array.isArray(list) || !list.length){
+        el.innerHTML = '<div class="muted">鐩墠娌掓湁绛栫暐绲辫▓銆?/div>';
+        return;
+      }
+      el.innerHTML = list.map(s => `
+        <div class="hist">
+          <div><b>${esc(s.strategy || "--")}</b> count=${esc(s.count || 0)} score=${fmt(s.score || 0,2)}</div>
+          <div class="muted">win=${fmt(s.win_rate || 0,1)}% avg=${fmt(s.avg_pnl || 0,2)}% ${esc(s.updated_at || "")}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderBackendThreads(threads){
+      const el = document.getElementById("backend-threads");
+      if (!el) return;
+      const rows = Object.values(threads || {}).sort((a,b) => Number(b.updated_ts || 0) - Number(a.updated_ts || 0));
+      if (!rows.length){
+        el.innerHTML = '<div class="muted">鐒″煼琛岀窉璩囨枡銆?/div>';
+        return;
+      }
+      el.innerHTML = rows.map(t => `
+        <div class="hist">
+          <div><b>${esc(t.label || t.name || "--")}</b> <span class="badge">${esc(t.status || "--")}</span></div>
+          <div class="muted">${esc(t.updated_at || "--")} | starts=${esc(t.starts || 0)} restart=${esc(t.restart_count || 0)}</div>
+          <div>${esc(t.detail || "--")}</div>
+          ${t.last_error ? `<div class="bad">error: ${esc(t.last_error)}</div>` : ""}
+        </div>
+      `).join("");
+    }
+
+    function renderOpenAiPendingAdvice(list){
+      const el = document.getElementById("openai-pending-advice");
+      if (!el) return;
+      if (!Array.isArray(list) || !list.length){
+        el.innerHTML = '<div class="muted">鐩墠娌掓湁寰呰瀵熴€?/div>';
+        return;
+      }
+      el.innerHTML = list.map(r => `
+        <div class="hist">
+          <div><b>${esc((r.symbol || "").replace("/USDT:USDT",""))}</b> <span class="badge">${esc(r.status || "observe")}</span> <span class="badge">${esc(r.watch_trigger_type || "--")}</span></div>
+          <div class="muted">trigger=${fmt(r.watch_trigger_price || 0, 6)} invalid=${fmt(r.watch_invalidation_price || 0, 6)} tf=${esc(r.watch_timeframe || "--")}</div>
+          <div class="muted">expires=${esc(r.observe_expires_at || r.next_recheck_at || "--")}</div>
+          <div>${esc(r.recheck_reason || r.watch_note || "--")}</div>
+          <div style="margin-top:6px"><button class="btn" onclick="manualOpenAiSend('${esc(r.symbol || "")}')">鎵嬪嫊鐧奸€侀噸瀵?/button></div>
+        </div>
+      `).join("");
+    }
+
+    function renderOpenAiDecisions(list){
+      const el = document.getElementById("openai-decisions");
+      if (!el) return;
+      if (!Array.isArray(list) || !list.length){
+        el.innerHTML = '<div class="muted">鐩墠娌掓湁杩戞湡姹虹瓥銆?/div>';
+        return;
+      }
+      el.innerHTML = list.map(r => `
+        <div class="hist">
+          <div><b>${esc((r.symbol || "").replace("/USDT:USDT",""))}</b> <span class="badge">${esc(r.bot_instruction || r.action || r.status || "--")}</span> <span class="badge">${esc(r.trade_side || "--")}</span></div>
+          <div class="muted">${esc(r.time || "--")} | entry=${fmt(r.entry_price || 0,6)} sl=${fmt(r.stop_loss || 0,6)} tp=${fmt(r.take_profit || 0,6)} rr=${fmt(r.rr_ratio || 0,2)}</div>
+          <div>${esc(r.market_read || r.entry_plan || "--")}</div>
+          ${r.reason_to_skip ? `<div class="warn">skip: ${esc(r.reason_to_skip)}</div>` : ""}
+        </div>
+      `).join("");
+    }
+
+    async function refreshNow(){
+      try{
+        const d = await fetchMergedState();
+        window.__lastState = d || {};
+
+        setText("last-update", d.last_update || "--");
+        setText("scan-progress", d.scan_progress || "--");
+        setText("equity", fmt(d.equity, 2));
+        const pnl = Number(d.total_pnl || 0);
+        setText("total-pnl", (pnl >= 0 ? "+" : "") + fmt(pnl, 2), pnl >= 0 ? "v good" : "v bad");
+        setText("threshold", (d.threshold_info || {}).current ?? "--");
+        setText("threshold-phase", (d.threshold_info || {}).phase ?? "--");
+        setText("risk-flag", (d.risk_status || {}).trading_ok === false ? "鏆仠" : "姝ｅ父");
+        setText("risk-flag-side", (d.risk_status || {}).trading_ok === false ? "鏆仠" : "姝ｅ父");
+        setText("risk-note", (d.risk_status || {}).halt_reason || "--");
+        setText("market-direction", (d.market_info || {}).direction || "--");
+        setText("market-pattern", (d.market_info || {}).pattern || "--");
+        setText("market-prediction", (d.market_info || {}).prediction || "--");
+        setText("news-title", d.latest_news_title || "--");
+
+        setText("learn-total", (d.learn_summary || {}).total_trades ?? 0);
+        setText("learn-winrate", fmt((d.learn_summary || {}).win_rate || 0, 1) + "%");
+        setText("learn-avg", fmt((d.learn_summary || {}).avg_pnl || 0, 2) + "%");
+        const rr = Number((d.learn_summary || {}).current_tp_mult || 0) / Math.max(Number((d.learn_summary || {}).current_sl_mult || 1), 0.0001);
+        setText("learn-rr", fmt(rr, 2));
+
+        renderSignals(d.general_top_signals || d.top_signals || []);
+        renderShortGainers(d.short_gainer_signals || []);
+        renderPositions(d.active_positions || [], d.trailing_info || {}, d.protection_state || {});
+        renderFvgOrders(d.fvg_orders || {});
+        renderHistory(d.trade_history || []);
+        renderBackendThreads(d.backend_threads || ((d.ai_runtime || {}).backend_threads || {}));
+
+        const ai = d.ai_panel || {};
+        const openai = ai.openai_trade || {};
+        setText("ai-mode", ai.mode || "scan_only");
+        setText("ai-live-count", (d.learn_summary || {}).total_trades ?? 0);
+        renderAiStrategies(ai.best_strategies || []);
+
+        setText("openai-enabled", openai.enabled ? "鏄? : "鍚?);
+        setText("openai-api-ready", openai.api_key_present ? "鏄? : "鍚?);
+        setText("openai-model", openai.model || "--");
+        setText("openai-top-k", openai.top_k_per_scan ?? "--");
+        setText("openai-send-limit", openai.sends_per_scan ?? "--");
+        setText("openai-cooldown", openai.cooldown_minutes != null ? String(openai.cooldown_minutes) + " 鍒嗛悩" : "--");
+        setText("openai-budget-total", openai.budget_total_twd != null ? fmt(openai.budget_total_twd, 2) + " TWD" : "--");
+        setText("openai-budget-spent", openai.spent_estimated_twd != null ? fmt(openai.spent_estimated_twd, 2) + " TWD" : "--");
+        setText("openai-budget-remaining", openai.remaining_estimated_twd != null ? fmt(openai.remaining_estimated_twd, 2) + " TWD" : "--");
+        setText("openai-api-calls", openai.api_calls ?? "--");
+        setText("openai-pending-count", openai.pending_advice_count ?? ((openai.pending_advice || []).length || 0));
+
+        const gate = openai.gate_debug || {};
+        setText("openai-gate-status", gate.status || "--");
+        setText("openai-last-error", openai.last_error || "灏氱劇 OpenAI 閷銆?);
+        const gateLines = [];
+        if (gate.attempted) gateLines.push("attempted=" + gate.attempted);
+        if (gate.status) gateLines.push("status=" + gate.status);
+        if (Array.isArray(gate.blockers) && gate.blockers.length) gateLines.push("blockers=" + gate.blockers.join(" | "));
+        if (gate.forced_first_send) gateLines.push("forced_first_send=true");
+        setText("openai-gate-debug", gateLines.length ? gateLines.join("\n") : "灏氱劇 Gate 瑷婃伅銆?);
+
+        renderOpenAiPendingAdvice(openai.pending_advice || []);
+        renderOpenAiDecisions(openai.recent_decisions || []);
+
+        const ab = d.auto_backtest || {};
+        const btLine = ab.summary || (ab.running ? "鍥炴脯閫茶涓? : "鍥炴脯鍋滅敤鎴栧皻鏈煼琛?);
+        setText("ai-backtest-summary", btLine);
+      }catch(err){
+        setText("scan-progress", "鍒锋柊澶辨晽: " + (err && err.message ? err.message : String(err)));
+      }
+    }
+
+    async function manualOpenAiSend(symbol){
+      if (!symbol) return;
+      try{
+        const res = await fetch("/api/openai_manual_send", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({symbol})
+        });
+        const d = await res.json();
+        if (!d.ok){
+          alert(d.message || "鎵嬪嫊鐧奸€佸け鏁?);
+        }else{
+          alert(d.message || "宸查€佸嚭鎵嬪嫊閲嶅");
+        }
+      }catch(e){
+        alert("鎵嬪嫊鐧奸€佸け鏁? " + e.message);
+      }
+      setTimeout(refreshNow, 600);
+    }
+
+    async function cancelFvgOrder(symbol){
+      if (!confirm("纰哄畾鍙栨秷 " + symbol + " 鐨勬帥鍠紵")) return;
+      try{
+        await fetch("/api/cancel_fvg_order", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({symbol})
+        });
+      }catch(_e){}
+      setTimeout(refreshNow, 700);
+    }
+
+    async function releaseRiskOverride(){
+      try{
+        const res = await fetch("/api/risk_override", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({action:"release"})
+        });
+        const d = await res.json();
+        alert(d.message || (d.ok ? "宸茶В闄らⅷ鎺ф毇鍋? : "瑙ｉ櫎澶辨晽"));
+      }catch(e){
+        alert("瑙ｉ櫎澶辨晽: " + e.message);
+      }
+      setTimeout(refreshNow, 700);
+    }
+
+    async function closeAll(){
+      if (!confirm("纰哄畾鍏ㄩ儴骞冲€夛紵")) return;
+      try{
+        await fetch("/api/close_all", {method:"POST"});
+      }catch(_e){}
+      setTimeout(refreshNow, 900);
+    }
+
+    async function runAiBacktest(){
+      setText("ai-backtest-summary", "鍥炴脯瑙哥櫦涓?..");
+      try{
+        const res = await fetch("/api/force_backtest", {method:"POST"});
+        const d = await res.json();
+        setText("ai-backtest-summary", d.summary || d.error || "鍥炴脯瀹屾垚");
+      }catch(e){
+        setText("ai-backtest-summary", "鍥炴脯澶辨晽: " + e.message);
+      }
+      setTimeout(refreshNow, 700);
+    }
+
+    refreshNow();
+    setInterval(refreshNow, 5000);
+  </script>
+</body>
+</html>
+
