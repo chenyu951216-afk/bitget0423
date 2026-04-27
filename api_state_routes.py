@@ -12,7 +12,7 @@ def build_state_lite_payload(base_payload: Dict[str, Any]) -> Dict[str, Any]:
     keys = [
         'last_update', 'scan_progress', 'equity', 'total_pnl', 'threshold_info',
         'risk_status', 'market_info', 'latest_news_title', 'learn_summary',
-        'lt_info', 'fvg_orders', 'top_signals', 'general_top_signals', 'short_gainer_signals',
+        'lt_info', 'fvg_orders', 'top_signals', 'general_top_signals', 'short_gainer_signals', 'prebreakout_signals', 'prebreakout_leaderboard',
         'watchlist', 'backend_threads'
     ]
     return pick_keys(base_payload, keys)
@@ -24,5 +24,5 @@ def build_positions_payload(base_payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def build_ai_panel_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
-    keys = ['ai_panel', 'auto_backtest', 'trend_dashboard', 'top_signals', 'general_top_signals', 'short_gainer_signals', 'watchlist', 'learn_summary', 'backend_threads']
+    keys = ['ai_panel', 'auto_backtest', 'trend_dashboard', 'top_signals', 'general_top_signals', 'short_gainer_signals', 'prebreakout_signals', 'prebreakout_leaderboard', 'watchlist', 'learn_summary', 'backend_threads']
     return pick_keys(payload, keys)
