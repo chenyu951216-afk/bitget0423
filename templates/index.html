@@ -1,0 +1,650 @@
+﻿<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>加密交易機器人控制台</title>
+  <style>
+    :root{
+      --bg:#071022;
+      --panel:#0f1c3a;
+      --line:#1e3566;
+      --text:#e7f1ff;
+      --muted:#8da8d2;
+      --good:#28d69a;
+      --warn:#f5c66c;
+      --bad:#ff6b8a;
+      --cyan:#5edfff;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(180deg,#060d1e,#071022 40%,#08142b);color:var(--text);font-family:"Segoe UI",Tahoma,Arial,sans-serif}
+    .shell{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+    .side{padding:16px;border-right:1px solid var(--line);background:rgba(5,12,28,.88)}
+    .brand{padding:14px;border:1px solid var(--line);border-radius:14px;background:#0b1733}
+    .brand h1{margin:0;font-size:22px}
+    .brand p{margin:8px 0 0;color:var(--muted);font-size:12px;line-height:1.5}
+    .nav{margin-top:14px;display:grid;gap:8px}
+    .nav button{border:1px solid var(--line);background:#0d1a37;color:var(--text);padding:10px 12px;border-radius:10px;text-align:left;cursor:pointer}
+    .nav button.active{border-color:#2f5fb2;background:#112552}
+    .runtime{margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:12px;background:#0b1733}
+    .runtime h3{margin:0 0 8px;font-size:13px;color:#b8d3ff}
+    .runtime .row{font-size:12px;color:var(--muted);margin-top:6px}
+    .main{padding:16px}
+    .top{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+    .btn{border:1px solid var(--line);background:#112552;color:var(--text);padding:8px 12px;border-radius:10px;cursor:pointer}
+    .pill{border:1px solid var(--line);background:#0d1a37;padding:8px 12px;border-radius:999px;font-size:12px}
+    .section{display:none}
+    .section.active{display:block}
+    .grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px}
+    .panel{grid-column:span 12;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
+    .span-8{grid-column:span 8}
+    .span-6{grid-column:span 6}
+    .span-4{grid-column:span 4}
+    .span-3{grid-column:span 3}
+    .head{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+    .head h3{margin:0;font-size:16px}
+    .head p{margin:4px 0 0;color:var(--muted);font-size:12px}
+    .kv{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    .item{background:#0a1733;border:1px solid #1a315f;border-radius:10px;padding:8px}
+    .k{font-size:11px;color:var(--muted)}
+    .v{font-size:18px;font-weight:700;margin-top:4px}
+    .signals{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .card{background:#0a1733;border:1px solid #1a315f;border-radius:10px;padding:10px}
+    .row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+    .badge{display:inline-block;font-size:11px;padding:4px 8px;border-radius:999px;border:1px solid #2a4579;background:#102247;color:#cfe2ff}
+    .good{color:var(--good)}
+    .bad{color:var(--bad)}
+    .warn{color:var(--warn)}
+    .muted{color:var(--muted)}
+    .desc{margin-top:8px;font-size:12px;line-height:1.5;color:#d3e5ff}
+    table{width:100%;border-collapse:collapse}
+    th,td{border-bottom:1px solid #1a315f;padding:8px 6px;font-size:12px;text-align:left}
+    th{color:var(--muted);font-weight:500}
+    .list{display:grid;gap:8px}
+    .hist{background:#0a1733;border:1px solid #1a315f;border-radius:10px;padding:10px;font-size:12px}
+    pre{margin:0;white-space:pre-wrap;word-break:break-word;font-size:12px;color:#d6e8ff}
+    @media (max-width:1200px){
+      .shell{grid-template-columns:1fr}
+      .side{border-right:none;border-bottom:1px solid var(--line)}
+      .span-8,.span-6,.span-4,.span-3{grid-column:span 12}
+      .signals{grid-template-columns:1fr}
+      .kv{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="side">
+      <div class="brand">
+        <h1>加密 AI 機器人</h1>
+        <p>掃描、持倉、OpenAI 決策與執行狀態。</p>
+      </div>
+      <div class="nav">
+        <button class="active" data-sec="overview">總覽</button>
+        <button data-sec="signals">候選訊號</button>
+        <button data-sec="positions">持倉與掛單</button>
+        <button data-sec="ai">AI 決策</button>
+      </div>
+      <div class="runtime">
+        <h3>執行狀態</h3>
+        <div class="row">最後更新: <b id="last-update">--</b></div>
+        <div class="row">掃描進度: <b id="scan-progress">--</b></div>
+        <div class="row">風控: <b id="risk-flag-side">--</b></div>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="top">
+        <button class="btn" onclick="refreshNow(true)">立即刷新</button>
+        <button class="btn" onclick="releaseRiskOverride()">解除風控暫停</button>
+        <button class="btn" onclick="closeAll()">全部平倉</button>
+        <span class="pill">AI 模式: <b id="ai-mode">--</b></span>
+        <span class="pill">Live 筆數: <b id="ai-live-count">0</b></span>
+      </div>
+
+      <section class="section active" id="section-overview">
+        <div class="grid">
+          <div class="panel">
+            <div class="kv">
+              <div class="item"><div class="k">權益</div><div class="v" id="equity">0</div></div>
+              <div class="item"><div class="k">總損益</div><div class="v" id="total-pnl">0</div></div>
+              <div class="item"><div class="k">門檻值</div><div class="v" id="threshold">--</div></div>
+              <div class="item"><div class="k">門檻階段</div><div class="v" id="threshold-phase">--</div></div>
+              <div class="item"><div class="k">風控狀態</div><div class="v" id="risk-flag">--</div></div>
+              <div class="item"><div class="k">風控說明</div><div class="v" id="risk-note">--</div></div>
+              <div class="item"><div class="k">市場方向</div><div class="v" id="market-direction">--</div></div>
+              <div class="item"><div class="k">市場型態</div><div class="v" id="market-pattern">--</div></div>
+              <div class="item"><div class="k">市場預判</div><div class="v" id="market-prediction">--</div></div>
+              <div class="item"><div class="k">學習樣本</div><div class="v" id="learn-total">0</div></div>
+              <div class="item"><div class="k">學習勝率</div><div class="v" id="learn-winrate">0%</div></div>
+              <div class="item"><div class="k">平均損益</div><div class="v" id="learn-avg">0%</div></div>
+              <div class="item"><div class="k">目前 RR</div><div class="v" id="learn-rr">--</div></div>
+            </div>
+            <div class="desc"><b>系統訊息:</b> <span id="news-title">--</span></div>
+          </div>
+          <div class="panel span-6">
+            <div class="head"><h3>後台執行緒</h3></div>
+            <div class="list" id="backend-threads"></div>
+          </div>
+          <div class="panel span-6">
+            <div class="head"><h3>AI 策略排行</h3></div>
+            <div class="list" id="ai-strategies"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="section-signals">
+        <div class="grid">
+          <div class="panel span-6">
+            <div class="head"><h3>一般排行榜（順勢）</h3></div>
+            <div class="signals" id="signals"></div>
+          </div>
+          <div class="panel span-6">
+            <div class="head"><h3>空漲幅榜（逆勢）</h3></div>
+            <div class="signals" id="short-gainers"></div>
+          </div>
+          <div class="panel">
+            <div class="head"><h3>特殊爆發榜（Pre-Breakout）</h3></div>
+            <div class="signals" id="prebreakout-signals"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="section-positions">
+        <div class="grid">
+          <div class="panel span-8">
+            <div class="head"><h3>目前持倉</h3></div>
+            <table>
+              <thead><tr><th>標的</th><th>方向</th><th>進場</th><th>未實現損益</th><th>追蹤 / 保護</th></tr></thead>
+              <tbody id="positions"></tbody>
+            </table>
+          </div>
+          <div class="panel span-4">
+            <div class="head"><h3>待成交限價單</h3></div>
+            <div class="list" id="fvg-orders-body"></div>
+          </div>
+          <div class="panel">
+            <div class="head"><h3>交易紀錄</h3></div>
+            <div class="list" id="history"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="section-ai">
+        <div class="grid">
+          <div class="panel">
+            <div class="head">
+              <div>
+                <h3>OpenAI 控制面板</h3>
+                <p>檢視送審次數、預算、閘門狀態、待觀察與近期決策。</p>
+              </div>
+              <button class="btn" onclick="runAiBacktest()">執行回測</button>
+            </div>
+            <div class="kv">
+              <div class="item"><div class="k">OpenAI 啟用</div><div class="v" id="openai-enabled">--</div></div>
+              <div class="item"><div class="k">API 就緒</div><div class="v" id="openai-api-ready">--</div></div>
+              <div class="item"><div class="k">模型</div><div class="v" id="openai-model">--</div></div>
+              <div class="item"><div class="k">候選數 Top K</div><div class="v" id="openai-top-k">--</div></div>
+              <div class="item"><div class="k">每輪送審</div><div class="v" id="openai-send-limit">--</div></div>
+              <div class="item"><div class="k">冷卻</div><div class="v" id="openai-cooldown">--</div></div>
+              <div class="item"><div class="k">預算(總)</div><div class="v" id="openai-budget-total">--</div></div>
+              <div class="item"><div class="k">預算(已用)</div><div class="v" id="openai-budget-spent">--</div></div>
+              <div class="item"><div class="k">預算(剩餘)</div><div class="v" id="openai-budget-remaining">--</div></div>
+              <div class="item"><div class="k">API 呼叫次數</div><div class="v" id="openai-api-calls">--</div></div>
+              <div class="item"><div class="k">待觀察數</div><div class="v" id="openai-pending-count">--</div></div>
+              <div class="item"><div class="k">閘門狀態</div><div class="v" id="openai-gate-status">--</div></div>
+            </div>
+            <div style="margin-top:10px"><pre id="openai-last-error">目前沒有 OpenAI 錯誤。</pre></div>
+            <div style="margin-top:10px"><pre id="openai-gate-debug">目前沒有 gate 除錯資訊。</pre></div>
+            <div style="margin-top:10px"><pre id="ai-backtest-summary">尚未執行回測。</pre></div>
+          </div>
+
+          <div class="panel span-6">
+            <div class="head"><h3>AI 待觀察</h3></div>
+            <div class="list" id="openai-pending-advice"></div>
+          </div>
+          <div class="panel span-6">
+            <div class="head"><h3>AI 近期決策</h3></div>
+            <div class="list" id="openai-decisions"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const fmt = (n, d = 2) => {
+      const x = Number(n || 0);
+      return Number.isFinite(x) ? x.toFixed(d) : "0.00";
+    };
+
+    const esc = (s) => String(s == null ? "" : s)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+
+    const setText = (id, value, cls = "") => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = value == null ? "--" : String(value);
+      if (cls) el.className = cls;
+    };
+
+    const navButtons = Array.from(document.querySelectorAll(".nav button"));
+    navButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        navButtons.forEach((x) => x.classList.toggle("active", x === btn));
+        const sec = btn.dataset.sec;
+        document.querySelectorAll(".section").forEach((s) => s.classList.toggle("active", s.id === "section-" + sec));
+      });
+    });
+
+    const mergedCache = {
+      base: {},
+      positions: {},
+      aiPanel: {},
+    };
+    let refreshInFlight = false;
+    let refreshQueued = false;
+
+    async function fetchJson(url, timeoutMs){
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), Math.max(Number(timeoutMs || 0), 1200));
+      try{
+        const res = await fetch(url, { signal: ctl.signal });
+        if (!res.ok) throw new Error("HTTP " + res.status + " " + url);
+        return await res.json();
+      }finally{
+        clearTimeout(timer);
+      }
+    }
+
+    async function fetchMergedState(){
+      const base = await fetchJson("/api/state_lite", 5200);
+      if (base && Object.keys(base).length){
+        mergedCache.base = Object.assign({}, mergedCache.base, base);
+      }
+
+      const results = await Promise.allSettled([
+        fetchJson("/api/positions_state", 5200),
+        fetchJson("/api/ai_panel_state", 5200),
+      ]);
+      const posRes = results[0];
+      const panelRes = results[1];
+
+      if (posRes.status === "fulfilled" && posRes.value && Object.keys(posRes.value).length){
+        mergedCache.positions = Object.assign({}, mergedCache.positions, posRes.value);
+      }
+      if (panelRes.status === "fulfilled" && panelRes.value && Object.keys(panelRes.value).length){
+        mergedCache.aiPanel = Object.assign({}, mergedCache.aiPanel, panelRes.value);
+      }
+
+      return Object.assign({}, mergedCache.base || {}, mergedCache.positions || {}, mergedCache.aiPanel || {});
+    }
+
+    function renderSignalCards(targetId, list, emptyText, sourceLabel){
+      const el = document.getElementById(targetId);
+      if (!el) return;
+      if (!Array.isArray(list) || !list.length){
+        el.innerHTML = `<div class="muted">${esc(emptyText)}</div>`;
+        return;
+      }
+      el.innerHTML = list.map((s) => {
+        const side = String(s.side || "").toLowerCase() === "short" || Number(s.score || 0) < 0 ? "short" : "long";
+        const sideLabel = side === "long" ? "做多" : "做空";
+        const scoreCls = side === "long" ? "good" : "bad";
+        const ao = s.auto_order || {};
+        const entry = Number(s.planned_entry_price || s.price || 0);
+        const orderStatus = ao.order_error ? `下單失敗: ${ao.order_error}` : (ao.will_order === false ? "AI 擋下" : "可下單");
+        return `
+          <div class="card">
+            <div class="row">
+              <b>${esc((s.symbol || "").replace("/USDT:USDT", ""))}</b>
+              <span class="${scoreCls}">${fmt(s.score, 1)}</span>
+            </div>
+            <div style="margin-top:6px">
+              <span class="badge">${esc(sourceLabel)}</span>
+              <span class="badge">${esc(sideLabel)}</span>
+              <span class="badge">排名 ${esc(s.rank || "--")}</span>
+              <span class="badge">RR ${fmt(s.rr_ratio || 0, 2)}</span>
+              <span class="badge">進場 ${fmt(entry, 6)}</span>
+              <span class="badge">止損 ${fmt(s.stop_loss, 6)}</span>
+              <span class="badge">止盈 ${fmt(s.take_profit, 6)}</span>
+            </div>
+            <div class="desc">${esc(orderStatus)}</div>
+            <div class="desc">${esc(s.desc || s.setup_label || "")}</div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderSignals(list){
+      const rows = Array.isArray(list) ? list.filter((s) => String((s || {}).candidate_source || "").toLowerCase() !== "prebreakout_scanner") : [];
+      renderSignalCards("signals", rows, "目前沒有一般排行榜候選。", "順勢");
+    }
+
+    function renderShortGainers(list){
+      renderSignalCards("short-gainers", list, "目前沒有空漲幅榜候選。", "逆勢");
+    }
+
+    function renderPrebreakout(list){
+      const rows = Array.isArray(list) ? list.filter((s) => String((s || {}).candidate_source || "").toLowerCase() === "prebreakout_scanner") : [];
+      renderSignalCards("prebreakout-signals", rows, "目前沒有特殊爆發候選。", "爆發");
+    }
+
+    function renderPositions(list, trailingInfo, protectionState){
+      const el = document.getElementById("positions");
+      if (!el) return;
+      if (!Array.isArray(list) || !list.length){
+        el.innerHTML = '<tr><td colspan="5" class="muted">目前沒有持倉。</td></tr>';
+        return;
+      }
+      el.innerHTML = list.map((p) => {
+        const pnl = Number(p.unrealizedPnl || 0);
+        const sideText = String(p.side || "").toLowerCase() === "short" ? "空" : "多";
+        const trail = trailingInfo && trailingInfo[p.symbol] ? trailingInfo[p.symbol] : null;
+        const prot = protectionState && protectionState[p.symbol] ? protectionState[p.symbol] : null;
+        const trailTxt = trail ? `追蹤階段=${trail.stop_stage || "--"} 追蹤比率=${fmt(trail.trail_pct || 0, 3)}` : "--";
+        const protErr = prot ? [prot.sl_error, prot.tp_error].filter(Boolean).join(" | ") : "";
+        const protTxt = prot
+          ? `止損:${prot.sl_ok ? "成功" : "失敗"} 止盈:${prot.tp_ok ? "成功" : "失敗"} (${prot.sl_mode || "--"})${protErr ? " 錯誤=" + protErr : ""}`
+          : "--";
+        return `
+          <tr>
+            <td>${esc((p.symbol || "").replace("/USDT:USDT", ""))}</td>
+            <td>${esc(sideText)}</td>
+            <td>${fmt(p.entryPrice || 0, 6)}</td>
+            <td class="${pnl >= 0 ? "good" : "bad"}">${pnl >= 0 ? "+" : ""}${fmt(pnl, 6)}</td>
+            <td><div>${esc(trailTxt)}</div><div class="muted">${esc(protTxt)}</div></td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function renderFvgOrders(fvgOrders){
+      const el = document.getElementById("fvg-orders-body");
+      if (!el) return;
+      const rows = Object.values(fvgOrders || {});
+      if (!rows.length){
+        el.innerHTML = '<div class="muted">目前沒有待成交限價單。</div>';
+        return;
+      }
+      el.innerHTML = rows.map((o) => `
+        <div class="hist">
+          <div><b>${esc((o.symbol || "").replace("/USDT:USDT", ""))}</b> ${esc(o.side || "--")}</div>
+          <div class="muted">id=${esc(o.order_id || "--")} price=${fmt(o.price || 0, 6)} sl=${fmt(o.stop_loss || 0, 6)} tp=${fmt(o.take_profit || 0, 6)}</div>
+          <div style="margin-top:6px"><button class="btn" onclick="cancelFvgOrder('${esc(o.symbol || "")}')">取消掛單</button></div>
+        </div>
+      `).join("");
+    }
+
+    function renderHistory(list){
+      const el = document.getElementById("history");
+      if (!el) return;
+      if (!Array.isArray(list) || !list.length){
+        el.innerHTML = '<div class="muted">目前沒有交易紀錄。</div>';
+        return;
+      }
+      el.innerHTML = list.slice(0, 25).map((h) => `
+        <div class="hist">
+          <div><b>${esc((h.symbol || "").replace("/USDT:USDT", ""))}</b> ${esc(h.side || "--")} @ ${fmt(h.price || 0, 6)}</div>
+          <div class="muted">${esc(h.time || "--")} | score=${fmt(h.score || 0, 1)} | sl=${fmt(h.stop_loss || 0, 6)} | tp=${fmt(h.take_profit || 0, 6)}${h.error ? " | error=" + esc(h.error) : ""}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderAiStrategies(list){
+      const el = document.getElementById("ai-strategies");
+      if (!el) return;
+      if (!Array.isArray(list) || !list.length){
+        el.innerHTML = '<div class="muted">目前沒有策略統計資料。</div>';
+        return;
+      }
+      el.innerHTML = list.map((s) => `
+        <div class="hist">
+          <div><b>${esc(s.strategy || "--")}</b> count=${esc(s.count || 0)} score=${fmt(s.score || 0, 2)}</div>
+          <div class="muted">win=${fmt(s.win_rate || 0, 1)}% avg=${fmt(s.avg_pnl || 0, 2)}% ${esc(s.updated_at || "")}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderBackendThreads(threads){
+      const el = document.getElementById("backend-threads");
+      if (!el) return;
+      const rows = Object.values(threads || {}).sort((a, b) => Number(b.updated_ts || 0) - Number(a.updated_ts || 0));
+      if (!rows.length){
+        el.innerHTML = '<div class="muted">目前沒有後台執行緒資料。</div>';
+        return;
+      }
+      el.innerHTML = rows.map((t) => `
+        <div class="hist">
+          <div><b>${esc(t.label || t.name || "--")}</b> <span class="badge">${esc(t.status || "--")}</span></div>
+          <div class="muted">${esc(t.updated_at || "--")} | starts=${esc(t.starts || 0)} restart=${esc(t.restart_count || 0)}</div>
+          <div>${esc(t.detail || "--")}</div>
+          ${t.last_error ? `<div class="bad">錯誤: ${esc(t.last_error)}</div>` : ""}
+        </div>
+      `).join("");
+    }
+
+    function renderOpenAiPendingAdvice(list){
+      const el = document.getElementById("openai-pending-advice");
+      if (!el) return;
+      if (!Array.isArray(list) || !list.length){
+        el.innerHTML = '<div class="muted">目前沒有待觀察項目。</div>';
+        return;
+      }
+      el.innerHTML = list.map((r) => `
+        <div class="hist">
+          <div><b>${esc((r.symbol || "").replace("/USDT:USDT", ""))}</b> <span class="badge">${esc(r.status || "observe")}</span> <span class="badge">${esc(r.watch_trigger_type || "--")}</span></div>
+          <div class="muted">觸發=${fmt(r.watch_trigger_price || 0, 6)} 失效=${fmt(r.watch_invalidation_price || 0, 6)} 週期=${esc(r.watch_timeframe || "--")}</div>
+          <div class="muted">到期=${esc(r.observe_expires_at || r.next_recheck_at || "--")}</div>
+          <div>${esc(r.recheck_reason || r.watch_note || "--")}</div>
+          <div style="margin-top:6px"><button class="btn" onclick="manualOpenAiSend('${esc(r.symbol || "")}')">手動發送</button></div>
+        </div>
+      `).join("");
+    }
+
+    function renderOpenAiDecisions(list){
+      const el = document.getElementById("openai-decisions");
+      if (!el) return;
+      if (!Array.isArray(list) || !list.length){
+        el.innerHTML = '<div class="muted">目前沒有近期決策。</div>';
+        return;
+      }
+      el.innerHTML = list.map((r) => `
+        <div class="hist">
+          <div><b>${esc((r.symbol || "").replace("/USDT:USDT", ""))}</b> <span class="badge">${esc(r.bot_instruction || r.action || r.status || "--")}</span> <span class="badge">${esc(String(r.trade_side || "").toLowerCase() === "short" ? "做空" : (String(r.trade_side || "").toLowerCase() === "long" ? "做多" : "--"))}</span></div>
+          <div class="muted">${esc(r.time || "--")} | 進場=${fmt(r.entry_price || 0, 6)} 止損=${fmt(r.stop_loss || 0, 6)} 止盈=${fmt(r.take_profit || 0, 6)} RR=${fmt(r.rr_ratio || 0, 2)}</div>
+          <div>${esc(r.market_read || r.entry_plan || "--")}</div>
+          ${r.reason_to_skip ? `<div class="warn">略過: ${esc(r.reason_to_skip)}</div>` : ""}
+        </div>
+      `).join("");
+    }
+
+    function scheduleRefresh(delayMs = 600){
+      setTimeout(() => refreshNow(true), Math.max(Number(delayMs || 0), 100));
+    }
+
+    async function refreshNow(force = false){
+      if (refreshInFlight){
+        if (force) refreshQueued = true;
+        return;
+      }
+      refreshInFlight = true;
+      try{
+        const d = await fetchMergedState();
+        if (d && Object.keys(d).length){
+          window.__lastState = d;
+        }
+        const state = (d && Object.keys(d).length) ? d : (window.__lastState || {});
+
+        setText("last-update", state.last_update || "--");
+        setText("scan-progress", state.scan_progress || "--");
+        setText("equity", fmt(state.equity, 2));
+
+        const pnl = Number(state.total_pnl || 0);
+        setText("total-pnl", (pnl >= 0 ? "+" : "") + fmt(pnl, 2), pnl >= 0 ? "v good" : "v bad");
+
+        setText("threshold", (state.threshold_info || {}).current ?? "--");
+        setText("threshold-phase", (state.threshold_info || {}).phase ?? "--");
+        setText("risk-flag", (state.risk_status || {}).trading_ok === false ? "暫停" : "正常");
+        setText("risk-flag-side", (state.risk_status || {}).trading_ok === false ? "暫停" : "正常");
+        setText("risk-note", (state.risk_status || {}).halt_reason || "--");
+        setText("market-direction", (state.market_info || {}).direction || "--");
+        setText("market-pattern", (state.market_info || {}).pattern || "--");
+        setText("market-prediction", (state.market_info || {}).prediction || "--");
+        setText("news-title", state.latest_news_title || "--");
+
+        setText("learn-total", (state.learn_summary || {}).total_trades ?? 0);
+        setText("learn-winrate", fmt((state.learn_summary || {}).win_rate || 0, 1) + "%");
+        setText("learn-avg", fmt((state.learn_summary || {}).avg_pnl || 0, 2) + "%");
+
+        const rr = Number((state.learn_summary || {}).current_tp_mult || 0) / Math.max(Number((state.learn_summary || {}).current_sl_mult || 1), 0.0001);
+        setText("learn-rr", fmt(rr, 2));
+
+        renderSignals(state.general_top_signals || state.top_signals || []);
+        renderShortGainers(state.short_gainer_signals || []);
+        renderPrebreakout(state.prebreakout_signals || []);
+        renderPositions(state.active_positions || [], state.trailing_info || {}, state.protection_state || {});
+        renderFvgOrders(state.fvg_orders || {});
+        renderHistory(state.trade_history || []);
+        renderBackendThreads(state.backend_threads || ((state.ai_runtime || {}).backend_threads || {}));
+
+        const aiPayload = (state.ai_panel && Object.keys(state.ai_panel).length) ? state.ai_panel : (window.__lastAiPanel || {});
+        if (state.ai_panel && Object.keys(state.ai_panel).length){
+          window.__lastAiPanel = state.ai_panel;
+        }
+        const openai = (aiPayload.openai_trade && Object.keys(aiPayload.openai_trade).length)
+          ? aiPayload.openai_trade
+          : (window.__lastOpenaiPanel || {});
+        if (aiPayload.openai_trade && Object.keys(aiPayload.openai_trade).length){
+          window.__lastOpenaiPanel = aiPayload.openai_trade;
+        }
+
+        setText("ai-mode", aiPayload.mode || "scan_only");
+        setText("ai-live-count", (state.learn_summary || {}).total_trades ?? 0);
+        renderAiStrategies(aiPayload.best_strategies || []);
+
+        setText("openai-enabled", openai.enabled ? "是" : "否");
+        setText("openai-api-ready", openai.api_key_present ? "是" : "否");
+        setText("openai-model", openai.model || "--");
+        setText("openai-top-k", openai.top_k_per_scan ?? "--");
+        setText("openai-send-limit", openai.sends_per_scan ?? "--");
+        setText("openai-cooldown", openai.cooldown_minutes != null ? String(openai.cooldown_minutes) + " 分鐘" : "--");
+        setText("openai-budget-total", openai.budget_total_twd != null ? fmt(openai.budget_total_twd, 2) + " TWD" : "--");
+        setText("openai-budget-spent", openai.spent_estimated_twd != null ? fmt(openai.spent_estimated_twd, 2) + " TWD" : "--");
+        setText("openai-budget-remaining", openai.remaining_estimated_twd != null ? fmt(openai.remaining_estimated_twd, 2) + " TWD" : "--");
+        setText("openai-api-calls", openai.api_calls ?? "--");
+        setText("openai-pending-count", openai.pending_advice_count ?? ((openai.pending_advice || []).length || 0));
+
+        const gate = openai.gate_debug || {};
+        setText("openai-gate-status", gate.status || "--");
+        setText("openai-last-error", openai.last_error || "目前沒有 OpenAI 錯誤。");
+
+        const gateLines = [];
+        if (gate.attempted) gateLines.push("嘗試標的=" + gate.attempted);
+        if (gate.status) gateLines.push("狀態=" + gate.status);
+        if (Array.isArray(gate.blockers) && gate.blockers.length) gateLines.push("阻擋原因=" + gate.blockers.join(" | "));
+        if (Array.isArray(gate.blockers_zh) && gate.blockers_zh.length) gateLines.push("阻擋原因(中文)=" + gate.blockers_zh.join(" | "));
+        if (gate.forced_first_send) gateLines.push("forced_first_send=true");
+        setText("openai-gate-debug", gateLines.length ? gateLines.join("\n") : "目前沒有 gate 除錯資訊。");
+
+        renderOpenAiPendingAdvice(openai.pending_advice || []);
+        renderOpenAiDecisions(openai.recent_decisions || []);
+
+        const ab = state.auto_backtest || {};
+        const btLine = ab.summary || (ab.running ? "回測執行中..." : "回測停用或尚未啟動。");
+        setText("ai-backtest-summary", btLine);
+      }catch(err){
+        const errMsg = (err && err.message ? err.message : String(err));
+        if (!(window.__lastState && Object.keys(window.__lastState).length)){
+          setText("scan-progress", "刷新失敗: " + errMsg);
+        }else{
+          setText("scan-progress", (window.__lastState.scan_progress || "--") + " | 刷新延遲，沿用上一筆資料");
+        }
+      }finally{
+        refreshInFlight = false;
+        if (refreshQueued){
+          refreshQueued = false;
+          setTimeout(() => refreshNow(false), 120);
+        }
+      }
+    }
+
+    async function manualOpenAiSend(symbol){
+      if (!symbol) return;
+      try{
+        const res = await fetch("/api/openai_manual_send", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({ symbol })
+        });
+        const d = await res.json();
+        if (!d.ok){
+          alert(d.message || "手動發送失敗。");
+        }else{
+          alert(d.message || "已排入手動發送。");
+        }
+      }catch(e){
+        alert("手動發送失敗: " + e.message);
+      }
+      scheduleRefresh(600);
+    }
+
+    async function cancelFvgOrder(symbol){
+      if (!confirm("要取消 " + symbol + " 的待成交掛單嗎？")) return;
+      try{
+        await fetch("/api/cancel_fvg_order", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({ symbol })
+        });
+      }catch(_e){}
+      scheduleRefresh(700);
+    }
+
+    async function releaseRiskOverride(){
+      try{
+        const res = await fetch("/api/risk_override", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({ action:"release" })
+        });
+        const d = await res.json();
+        alert(d.message || (d.ok ? "已解除風控暫停。" : "解除失敗。"));
+      }catch(e){
+        alert("解除失敗: " + e.message);
+      }
+      scheduleRefresh(700);
+    }
+
+    async function closeAll(){
+      if (!confirm("要全部平倉嗎？")) return;
+      try{
+        await fetch("/api/close_all", { method:"POST" });
+      }catch(_e){}
+      scheduleRefresh(900);
+    }
+
+    async function runAiBacktest(){
+      setText("ai-backtest-summary", "回測執行中...");
+      try{
+        const res = await fetch("/api/force_backtest", { method:"POST" });
+        const d = await res.json();
+        setText("ai-backtest-summary", d.summary || d.error || "回測完成。");
+      }catch(e){
+        setText("ai-backtest-summary", "回測失敗: " + e.message);
+      }
+      scheduleRefresh(700);
+    }
+
+    refreshNow(true);
+    setInterval(() => {
+      if (document.visibilityState === "visible"){
+        refreshNow(false);
+      }
+    }, 6500);
+  </script>
+</body>
+</html>
